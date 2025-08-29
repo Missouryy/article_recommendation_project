@@ -155,14 +155,13 @@ const fetchPaper = async () => {
     references.value = referencesRes.data
     citations.value = citationsRes.data
 
-    // 新增：判断当前用户是否已收藏该论文
+    // 判断当前用户是否已收藏该论文
     if (userStore.isAuthenticated) {
       try {
         const bookmarksRes = await api.workspace.bookmarks({ limit: 1000 })
-        const bookmarksList = bookmarksRes.data as Paper[]
-        isBookmarked.value = bookmarksList.some(p => p.id === paperId)
+        const bookmarksList = Array.isArray(bookmarksRes.data) ? bookmarksRes.data : []
+        isBookmarked.value = paper.value ? bookmarksList.some(p => p.id === paper.value!.id) : false
       } catch (e) {
-        // 忽略收藏列表获取失败
         isBookmarked.value = false
       }
     } else {
@@ -184,17 +183,22 @@ const toggleBookmark = async () => {
   if (!userStore.isAuthenticated) {
     return
   }
+<<<<<<< HEAD
   
   try {
     const paperId = route.params.id as string
     
+=======
+  try {
+    const paperId = route.params.id as string
+>>>>>>> 8c6cd13 (fix: 修复了取消收藏的按钮不能正确显示的bug)
     if (isBookmarked.value) {
       await api.papers.unbookmark(paperId)
-      isBookmarked.value = false
     } else {
       await api.papers.bookmark(paperId)
-      isBookmarked.value = true
     }
+    // 操作后重新获取论文详情，确保所有状态同步
+    await fetchPaper()
   } catch (error) {
     console.error('收藏操作失败:', error)
   }
