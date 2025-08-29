@@ -47,7 +47,7 @@ class DatabaseConfig:
         
         # 默认使用 openalex_v3
         if not self._current_db:
-            self._current_db = "openalex_v1"
+            self._current_db = "openalex_v3"
     
     def get_current_database(self) -> str:
         """获取当前选择的数据库名称"""

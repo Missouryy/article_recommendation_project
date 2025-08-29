@@ -247,7 +247,7 @@ class DatabaseManager:
                         "test_user_001",
                         "student_zhang",
                         "student@example.com",
-                        "$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewdBPj4J/8QqHh2",  # password
+                        "$2b$12$m6LKuaIRdg9.1yM1uoUPWe2UGWXt.4wumwPTLorme280JrmBR70T2",  # password
                         "张同学",
                         datetime.now().isoformat()
                     ))
