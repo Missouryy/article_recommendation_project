@@ -43,9 +43,10 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
+import type { Paper } from '@/types'
 import { api } from '@/services/api'
 
-const papers = ref([])
+const papers = ref<Paper[]>([])
 const loading = ref(false)
 
 const fetchPapers = async () => {

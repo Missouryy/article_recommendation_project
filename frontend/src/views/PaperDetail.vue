@@ -124,6 +124,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
+import type { Paper } from '@/types'
 import { useRoute } from 'vue-router'
 import { api } from '@/services/api'
 import { useUserStore } from '@/stores/user'
@@ -131,10 +132,10 @@ import { useUserStore } from '@/stores/user'
 const route = useRoute()
 const userStore = useUserStore()
 
-const paper = ref(null)
-const references = ref([])
-const citations = ref([])
-const aiSummary = ref(null)
+const paper = ref<Paper | null>(null)
+const references = ref<Paper[]>([])
+const citations = ref<Paper[]>([])
+const aiSummary = ref<{ content: string } | null>(null)
 const loading = ref(false)
 const summaryLoading = ref(false)
 const isBookmarked = ref(false)
@@ -153,6 +154,20 @@ const fetchPaper = async () => {
     paper.value = paperRes.data
     references.value = referencesRes.data
     citations.value = citationsRes.data
+
+    // 新增：判断当前用户是否已收藏该论文
+    if (userStore.isAuthenticated) {
+      try {
+        const bookmarksRes = await api.workspace.bookmarks({ limit: 1000 })
+        const bookmarksList = bookmarksRes.data as Paper[]
+        isBookmarked.value = bookmarksList.some(p => p.id === paperId)
+      } catch (e) {
+        // 忽略收藏列表获取失败
+        isBookmarked.value = false
+      }
+    } else {
+      isBookmarked.value = false
+    }
     
     // 添加阅读记录
     if (userStore.isAuthenticated) {

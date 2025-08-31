@@ -8,16 +8,16 @@
             <div class="flex items-center">
               <!-- Logo -->
               <router-link to="/" class="flex-shrink-0 flex items-center">
-                <div class="h-8 w-8 bg-gradient-to-r from-blue-500 to-purple-600 rounded-lg mr-3"></div>
+                <img src="@/assets/logo.png" alt="Logo" class="h-8 w-8 rounded-lg mr-3 shadow-md" />
                 <span class="font-bold text-xl text-gray-900 dark:text-white">学术推荐</span>
               </router-link>
               
               <!-- 主导航 -->
               <div class="hidden md:ml-10 md:flex md:space-x-8">
-                <router-link to="/search" class="nav-link">智能搜索</router-link>
-                <router-link to="/papers" class="nav-link">论文库</router-link>
-                <router-link to="/authors" class="nav-link">学者</router-link>
-                <router-link to="/workspace" class="nav-link">工作台</router-link>
+                <router-link to="/search" class="nav-link nav-link-lg">智能搜索</router-link>
+                <router-link to="/papers" class="nav-link nav-link-lg">论文库</router-link>
+                <router-link to="/authors" class="nav-link nav-link-lg">学者</router-link>
+                <router-link to="/workspace" class="nav-link nav-link-lg">工作台</router-link>
               </div>
             </div>
             
@@ -118,8 +118,13 @@ onMounted(() => {
 </script>
 
 <style scoped>
+/* 导航栏字体放大，暗色模式适配所有元素 */
 .nav-link {
-  @apply text-gray-500 hover:text-gray-900 dark:text-gray-300 dark:hover:text-white px-3 py-2 rounded-md text-sm font-medium transition-colors;
+  @apply text-gray-500 hover:text-gray-900 dark:text-gray-300 dark:hover:text-white px-3 py-2 rounded-md text-base font-semibold transition-colors;
+}
+
+.nav-link-lg {
+  @apply text-lg font-bold;
 }
 
 .nav-link.router-link-active {
@@ -127,7 +132,7 @@ onMounted(() => {
 }
 
 .btn-primary {
-  @apply bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors;
+  @apply bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors dark:bg-blue-500 dark:hover:bg-blue-600 dark:text-white;
 }
 
 .btn-secondary {
