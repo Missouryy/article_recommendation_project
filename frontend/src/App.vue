@@ -2,23 +2,23 @@
   <div id="app" :class="{ 'dark': isDark }">
     <div class="min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors duration-300">
       <!-- 导航栏 -->
-      <nav class="bg-white/80 dark:bg-gray-800/80 backdrop-blur-md shadow-soft border-b border-gray-200/60 dark:border-gray-700/60 animate-fade-in">
+      <nav class="bg-white dark:bg-gray-800 shadow-lg border-b border-gray-200 dark:border-gray-700 animate-fade-in">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div class="flex justify-between h-16">
             <div class="flex items-center">
               <!-- Logo -->
-              <router-link to="/" class="flex-shrink-0 flex items-center group">
-                <div class="h-8 w-8 bg-gradient-to-r from-primary-600 to-accent-600 rounded-lg mr-3 transition-transform group-hover:scale-105"></div>
+              <router-link to="/" class="flex-shrink-0 flex items-center">
+                <img src="@/assets/logo.png" alt="Logo" class="h-8 w-8 rounded-lg mr-3 shadow-md" />
                 <span class="font-bold text-xl text-gray-900 dark:text-white">学术推荐</span>
               </router-link>
               
               <!-- 主导航 -->
               <div class="hidden md:ml-10 md:flex md:space-x-8">
-                <router-link to="/search" class="nav-link">智能搜索</router-link>
-                <router-link to="/papers" class="nav-link">论文库</router-link>
-                <router-link to="/authors" class="nav-link">学者</router-link>
-                <router-link to="/workspace" class="nav-link">工作台</router-link>
-              </div>
+                 <router-link to="/search" class="nav-link">智能搜索</router-link>
+                 <router-link to="/papers" class="nav-link">论文库</router-link>
+                 <router-link to="/authors" class="nav-link">学者</router-link>
+                 <router-link to="/workspace" class="nav-link">工作台</router-link>
+               </div>
             </div>
             
             <div class="flex items-center space-x-4">
@@ -41,8 +41,8 @@
                   @click="showUserMenu = !showUserMenu"
                   class="flex items-center text-sm rounded-full focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
                 >
-                  <!-- 修复：使用CSS生成的头像，不依赖图片文件 -->
-                  <div class="h-8 w-8 rounded-full bg-gradient-to-r from-primary-600 to-accent-600 text-white flex items-center justify-center text-sm font-medium shadow-soft">
+                  <!-- 使用CSS生成的头像，不依赖图片文件 -->
+                  <div class="h-8 w-8 rounded-full bg-gray-300 flex items-center justify-center text-gray-600 text-sm font-medium">
                     {{ userStore.userInitials || 'U' }}
                   </div>
                 </button>
@@ -67,14 +67,16 @@
       <main class="flex-1">
         <router-view v-slot="{ Component }">
           <transition name="fade" mode="out-in">
-            <component :is="Component" />
+            <keep-alive include="Search,Papers">
+              <component :is="Component" />
+            </keep-alive>
           </transition>
         </router-view>
       </main>
       
       <!-- 全局通知 -->
       <div v-if="notification.show" class="fixed top-4 right-4 z-50">
-        <div :class="notificationClasses" class="px-4 py-3 rounded-lg shadow-medium animate-scale-in">
+        <div :class="notificationClasses" class="px-4 py-3 rounded-lg shadow-lg animate-scale-in">
           <p class="text-sm font-medium">{{ notification.message }}</p>
         </div>
       </div>
@@ -123,18 +125,22 @@ onMounted(() => {
 
 <style scoped>
 .nav-link {
-  @apply text-gray-500 hover:text-gray-900 dark:text-gray-300 dark:hover:text-white px-3 py-2 rounded-md text-sm font-medium transition-colors relative after:content-[''] after:absolute after:left-3 after:right-3 after:-bottom-0.5 after:h-0.5 after:bg-gradient-to-r after:from-primary-600 after:to-accent-600 after:rounded-full after:scale-x-0 hover:after:scale-x-100 after:origin-left after:transition-transform;
+  @apply text-gray-500 hover:text-gray-900 dark:text-gray-300 dark:hover:text-white px-3 py-2 rounded-md text-base font-semibold transition-colors;
+}
+
+.nav-link-lg {
+  @apply text-lg font-bold;
 }
 
 .nav-link.router-link-active {
-  @apply text-primary-600 dark:text-primary-400;
+  @apply text-blue-600 dark:text-blue-400;
 }
 
 .btn-primary {
-  @apply bg-gradient-to-r from-primary-600 to-accent-600 hover:from-primary-700 hover:to-accent-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-all shadow-soft active:scale-[0.99];
+  @apply bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors dark:bg-blue-500 dark:hover:bg-blue-600 dark:text-white;
 }
 
 .btn-secondary {
-  @apply bg-gray-200/80 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-900 dark:text-white px-4 py-2 rounded-lg text-sm font-medium transition-all;
+  @apply bg-gray-200 hover:bg-gray-300 dark:bg-gray-600 dark:hover:bg-gray-500 text-gray-900 dark:text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors;
 }
 </style>

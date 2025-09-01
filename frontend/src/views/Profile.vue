@@ -132,7 +132,7 @@ const form = ref({
   email: '',
   full_name: '',
   affiliation: '',
-  research_interests: []
+  research_interests: [] as string[]
 })
 
 const passwordForm = ref({

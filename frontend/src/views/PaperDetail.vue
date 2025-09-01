@@ -1,6 +1,12 @@
 <template>
-  <div class="min-h-screen bg-gray-50 dark:bg-gray-900 animate-fade-in">
-    <div v-if="paper" class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+  <div class="min-h-screen bg-gray-50 dark:bg-gray-900">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-8">
+      <button @click="$router.back()" class="mb-6 btn-secondary flex items-center gap-2 hover:bg-gray-300 dark:hover:bg-gray-500 transition-colors">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/></svg>
+        返回
+      </button>
+    </div>
+    <div v-if="paper" class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-2">
       <!-- 论文标题和基本信息 -->
       <div class="card p-8 mb-8 animate-scale-in">
         <h1 class="text-3xl font-bold text-gray-900 dark:text-white mb-4">
@@ -124,6 +130,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
+import type { Paper } from '@/types'
 import { useRoute } from 'vue-router'
 import { api } from '@/services/api'
 import { useUserStore } from '@/stores/user'
@@ -131,10 +138,10 @@ import { useUserStore } from '@/stores/user'
 const route = useRoute()
 const userStore = useUserStore()
 
-const paper = ref(null)
-const references = ref([])
-const citations = ref([])
-const aiSummary = ref(null)
+const paper = ref<Paper | null>(null)
+const references = ref<Paper[]>([])
+const citations = ref<Paper[]>([])
+const aiSummary = ref<{ content: string } | null>(null)
 const loading = ref(false)
 const summaryLoading = ref(false)
 const isBookmarked = ref(false)
@@ -153,7 +160,20 @@ const fetchPaper = async () => {
     paper.value = paperRes.data
     references.value = referencesRes.data
     citations.value = citationsRes.data
-    
+
+    // 判断当前用户是否已收藏该论文
+    if (userStore.isAuthenticated) {
+      try {
+        const bookmarksRes = await api.workspace.bookmarks({ limit: 1000 })
+        const bookmarksList = Array.isArray(bookmarksRes.data) ? bookmarksRes.data : []
+        isBookmarked.value = paper.value ? bookmarksList.some(p => p.id === paper.value!.id) : false
+      } catch (e) {
+        isBookmarked.value = false
+      }
+    } else {
+      isBookmarked.value = false
+    }
+
     // 添加阅读记录
     if (userStore.isAuthenticated) {
       api.workspace.addReading(paperId)
@@ -180,6 +200,7 @@ const toggleBookmark = async () => {
       await api.papers.bookmark(paperId)
       isBookmarked.value = true
     }
+
   } catch (error) {
     console.error('收藏操作失败:', error)
   }

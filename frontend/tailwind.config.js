@@ -110,8 +110,8 @@ export default {
       },
       boxShadow: {
         'soft': '0 2px 15px -3px rgba(0, 0, 0, 0.07), 0 10px 20px -2px rgba(0, 0, 0, 0.04)',
-        'medium': '0 8px 30px -10px rgba(0, 0, 0, 0.15)',
-        'strong': '0 20px 40px -20px rgba(0, 0, 0, 0.25)',
+        'medium': '0 4px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 15px -3px rgba(0, 0, 0, 0.05)',
+        'strong': '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
         'glass': '0 1px 2px rgba(0,0,0,0.04), 0 8px 20px rgba(2,132,199,0.08)'
       },
       borderRadius: {

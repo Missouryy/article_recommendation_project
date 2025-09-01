@@ -86,7 +86,7 @@
                 @click="$router.push(`/authors/${author.id}`)"
               >
                 <div class="flex items-center space-x-3">
-                  <div class="w-10 h-10 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full flex items-center justify-center">
+                  <div class="w-10 h-10 bg-blue-600 rounded-full flex items-center justify-center">
                     <span class="text-white font-bold text-sm">
                       {{ getInitials(author.name) }}
                     </span>
@@ -108,6 +108,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
+import type { Paper, Author, Recommendation } from '@/types'
 import { api } from '@/services/api'
 
 const stats = ref({
@@ -116,9 +117,10 @@ const stats = ref({
   followed_authors_count: 0,
   reading_history_count: 0
 })
-const recommendations = ref([])
-const recentBookmarks = ref([])
-const followedAuthors = ref([])
+
+const recommendations = ref<Recommendation[]>([])
+const recentBookmarks = ref<Paper[]>([])
+const followedAuthors = ref<Author[]>([])
 
 const getInitials = (name: string) => {
   return name

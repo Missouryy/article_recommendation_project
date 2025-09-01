@@ -1,7 +1,7 @@
 <template>
   <div class="min-h-screen animate-fade-in">
     <!-- Hero Section -->
-    <section class="relative bg-gradient-to-br from-primary-700 via-indigo-600 to-accent-700 text-white">
+     <section class="relative bg-blue-600 text-white">
       <div class="absolute inset-0 bg-black opacity-20"></div>
       <div class="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-24">
         <div class="text-center">
@@ -13,18 +13,20 @@
           </p>
           
           <!-- 搜索框 -->
-          <div class="max-w-3xl mx-auto mb-8">
+          <div class="max-w-2xl mx-auto mb-8">
             <div class="relative animate-scale-in">
               <input
                 v-model="searchQuery"
                 @keyup.enter="handleSearch"
                 type="text"
                 placeholder="搜索论文、作者或关键词..."
-                class="w-full px-6 py-4 pr-16 text-lg rounded-full bg-white/95 text-gray-900 shadow-medium focus:outline-none focus:ring-2 focus:ring-accent-500"
+                class="input w-full px-7 py-5 pr-24 text-xl rounded-2xl bg-white/80 dark:bg-gray-800/80 shadow-xl border border-blue-300 dark:border-blue-500 focus:border-blue-500 focus:ring-2 focus:ring-blue-400 text-gray-900 dark:text-white placeholder:text-gray-400 dark:placeholder:text-gray-500 font-sans backdrop-blur"
+                style="font-family: -apple-system, BlinkMacSystemFont, 'San Francisco', 'Helvetica Neue', Arial, sans-serif;"
               >
               <button
                 @click="handleSearch"
-                class="absolute right-2 top-2 btn-primary rounded-full px-6 py-2"
+                class="absolute right-3 top-1/2 h-12 px-7 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-semibold shadow-md transition-colors flex items-center justify-center"
+                style="font-family: inherit; transform: translateY(-50%);"
               >
                 搜索
               </button>
@@ -33,13 +35,13 @@
           
           <!-- 快速操作 -->
           <div class="flex flex-wrap justify-center gap-4 animate-slide-in">
-            <router-link to="/papers" class="btn-secondary bg-white/20 hover:bg-white/30 backdrop-blur rounded-full">
+            <router-link to="/papers" class="btn-secondary bg-white/20 hover:bg-white/30 backdrop-blur text-gray-100">
               浏览论文库
             </router-link>
-            <router-link to="/authors" class="btn-secondary bg-white/20 hover:bg-white/30 backdrop-blur rounded-full">
+            <router-link to="/authors" class="btn-secondary bg-white/20 hover:bg-white/30 backdrop-blur text-gray-100">
               学者画像
             </router-link>
-            <router-link v-if="!userStore.isAuthenticated" to="/register" class="btn-primary rounded-full">
+            <router-link v-if="!userStore.isAuthenticated" to="/register" class="btn-primary">
               免费注册
             </router-link>
           </div>
@@ -125,8 +127,8 @@
           </div>
         </div>
         
-        <div class="text-center mt-8">
-          <router-link to="/papers" class="btn-primary">
+        <div class="text-center mt-8 max-w-sm mx-auto">
+          <router-link to="/papers" class="btn bg-white text-blue-600 shadow-md hover:bg-gray-100 dark:bg-gray-800 dark:text-blue-400 dark:hover:bg-gray-700">
             查看更多论文
           </router-link>
         </div>
@@ -134,7 +136,7 @@
     </section>
 
     <!-- CTA Section -->
-    <section class="py-20 bg-gradient-to-r from-primary-700 to-accent-700 text-white">
+    <section class="py-20 bg-blue-600 text-white">
       <div class="max-w-4xl mx-auto text-center px-4 sm:px-6 lg:px-8">
         <h2 class="text-3xl md:text-4xl font-bold mb-4">
           开始您的学术探索之旅
@@ -143,13 +145,13 @@
           加入我们，体验前所未有的学术研究体验
         </p>
         <div class="flex flex-col sm:flex-row gap-4 justify-center">
-          <router-link v-if="!userStore.isAuthenticated" to="/register" class="btn bg-white text-primary-600 hover:bg-gray-100">
+          <router-link v-if="!userStore.isAuthenticated" to="/register" class="btn bg-white text-blue-600 hover:bg-gray-100">
             立即注册
           </router-link>
-          <router-link v-else to="/workspace" class="btn bg-white text-primary-600 hover:bg-gray-100">
+          <router-link v-else to="/workspace" class="btn bg-white text-blue-600 hover:bg-gray-100 dark:bg-gray-800 dark:text-blue-400 dark:hover:bg-gray-700">
             进入工作台
           </router-link>
-          <router-link to="/search" class="btn border-2 border-white text-white hover:bg-white hover:text-primary-600">
+          <router-link to="/search" class="btn border-2 border-white text-white hover:bg-white hover:text-blue-600 dark:border-4 dark:border-gray-800 dark:text-gray-800 dark:hover:bg-gray-800 dark:hover:text-blue-400">
             开始搜索
           </router-link>
         </div>
@@ -160,6 +162,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
+import type { Paper } from '@/types'
 import { useRouter } from 'vue-router'
 import { useUserStore } from '@/stores/user'
 import { api } from '@/services/api'
@@ -176,7 +179,7 @@ const router = useRouter()
 const userStore = useUserStore()
 
 const searchQuery = ref('')
-const trendingPapers = ref([])
+const trendingPapers = ref<Paper[]>([])
 const loading = ref(false)
 
 const features = ref([
@@ -257,4 +260,3 @@ onMounted(() => {
   overflow: hidden;
 }
 </style>
-

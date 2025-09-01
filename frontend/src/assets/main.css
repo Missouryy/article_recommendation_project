@@ -2,104 +2,136 @@
 @tailwind components;
 @tailwind utilities;
 
+/*
+  基础层 (Base Layer)
+  定义全局基础样式，如字体、背景色等。
+*/
 @layer base {
+  :root {
+    --color-primary: 37 99 235; /* blue-600 */
+    --color-danger: 220 38 38;  /* red-600 */
+  }
+
   html {
     @apply scroll-smooth;
   }
-  
+
   body {
-    @apply font-sans antialiased bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100;
+    font-family: -apple-system, BlinkMacSystemFont, "San Francisco", "Helvetica Neue", Arial, sans-serif;
+    @apply font-sans antialiased bg-white dark:bg-gray-900;
+    font-size: 18px;
+    letter-spacing: 0.01em;
+    line-height: 1.7;
+    color: #222;
+    min-height: 100vh;
+    padding-bottom: 32px;
   }
 }
 
+/*
+  组件层 (Components Layer)
+  定义可复用的 UI 组件，如卡片、按钮等。
+*/
 @layer components {
-  :root {
-    --color-bg: 248 250 252; /* gray-50 */
-    --color-surface: 255 255 255; /* white */
-    --color-text: 17 24 39; /* gray-900 */
-    --color-muted: 107 114 128; /* gray-500 */
-    --color-primary: 37 99 235; /* blue-600 */
-    --color-accent: 6 182 212; /* cyan-500 */
-  }
-
-  .surface {
-    @apply bg-white/80 dark:bg-gray-800/80 backdrop-blur-md shadow-glass rounded-xl border border-gray-200/60 dark:border-gray-700/60;
-  }
-
   .card {
-    @apply rounded-xl border border-gray-200/60 dark:border-gray-700/60 shadow-soft bg-gradient-card dark:bg-gradient-dark-card;
+    @apply bg-white/80 dark:bg-gray-800/80 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 backdrop-blur-lg;
+    box-shadow: 0 4px 24px 0 rgba(0,0,0,0.08);
   }
-  
+
   .card-hover {
-    @apply card hover:shadow-medium transition-all duration-300 hover:-translate-y-0.5;
+    @apply card hover:shadow-2xl hover:-translate-y-0.5 transition-all duration-300;
+    will-change: box-shadow, transform;
   }
-  
+
   .btn {
-    @apply px-4 py-2 rounded-lg font-medium transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-50 disabled:cursor-not-allowed;
+    @apply flex justify-center items-center px-6 py-3 font-semibold rounded-[18px] transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 shadow-md backdrop-blur-lg disabled:opacity-50 disabled:cursor-not-allowed active:scale-[0.99];
+    font-family: inherit;
+    font-size: 1.08rem;
+    letter-spacing: 0.01em;
+    box-shadow: 0 2px 12px 0 rgba(60,60,120,0.08);
   }
-  
+
   .btn-primary {
-    @apply btn text-white bg-gradient-to-r from-primary-600 to-accent-600 hover:from-primary-700 hover:to-accent-700 active:scale-[0.99];
+    @apply btn bg-blue-600 hover:bg-blue-700 text-white focus:ring-blue-500;
+    box-shadow: 0 2px 8px 0 rgba(60,60,120,0.08);
   }
-  
+
   .btn-secondary {
-    @apply btn bg-gray-200/80 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-900 dark:text-white;
+    @apply btn bg-white/60 dark:bg-gray-700/60 hover:bg-white/80 dark:hover:bg-gray-600/80 text-gray-900 dark:text-white focus:ring-gray-500;
+    border: 1px solid rgba(200,200,200,0.2);
   }
-  
+
   .btn-danger {
     @apply btn bg-red-600 hover:bg-red-700 text-white focus:ring-red-500;
   }
-  
+
   .input {
-    @apply w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white/90 dark:bg-gray-700/90 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-accent-500 focus:border-transparent focus:shadow-[0_0_0_4px_rgba(6,182,212,0.15)];
+    @apply w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-xl bg-white/80 dark:bg-gray-700/80 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent backdrop-blur;
+    font-family: inherit;
+    box-shadow: 0 0 0 4px rgba(var(--color-primary), 0);
+    transition: box-shadow 0.2s ease;
   }
-  
+
+  .input:focus {
+    box-shadow: 0 0 0 4px rgba(var(--color-primary), 0.15);
+  }
+
   .label {
     @apply block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2;
   }
-  
+
   .badge {
-    @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium;
+    @apply inline-flex items-center px-3 py-1 rounded-full text-xs font-medium shadow-sm backdrop-blur;
+    font-family: inherit;
   }
-  
-  .badge-primary {
-    @apply badge bg-cyan-100 text-cyan-800 dark:bg-cyan-900 dark:text-cyan-200;
-  }
-  
-  .badge-secondary {
-    @apply badge bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200;
-  }
-  
-  .badge-success {
-    @apply badge bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200;
-  }
-  
+
+  .badge-primary { @apply badge bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200; }
+  .badge-secondary { @apply badge bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200; }
+  .badge-success { @apply badge bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200; }
+
   .spinner {
-    @apply animate-spin h-5 w-5 border-2 border-gray-300 border-t-primary-600 rounded-full;
+    @apply animate-spin h-5 w-5 border-2 border-gray-300 border-t-blue-600 rounded-full backdrop-blur;
+  }
+
+  .chart-container, .graph-container {
+    @apply relative w-full bg-white/80 dark:bg-gray-800/80 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-lg backdrop-blur-lg;
+  }
+
+  .chart-container { @apply h-64 p-6; }
+
+  .graph-node {
+    @apply cursor-pointer transition-transform duration-200 hover:opacity-80 hover:scale-105;
   }
 }
 
-/* 自定义滚动条 */
+/*
+  全局工具样式 (Global Utilities)
+  定义不属于特定组件的全局样式，如滚动条、动画等。
+*/
+
 ::-webkit-scrollbar {
-  @apply w-2;
+  width: 15px;
 }
 
 ::-webkit-scrollbar-track {
-  @apply bg-gray-100 dark:bg-gray-800;
+  background: transparent;
 }
 
 ::-webkit-scrollbar-thumb {
-  @apply bg-gray-400 dark:bg-gray-600 rounded-full;
+  background-color: rgba(156, 163, 175, 0.5);
+  border-radius: 20px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+  transition: background-color 0.2s ease;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  @apply bg-gray-500 dark:bg-gray-500;
+  background-color: rgba(107, 114, 128, 0.7);
 }
 
-/* 动画效果 */
 .fade-enter-active,
 .fade-leave-active {
-  transition: opacity 0.3s ease;
+  transition: opacity 0.4s cubic-bezier(.4,0,.2,1);
 }
 
 .fade-enter-from,
@@ -107,48 +139,22 @@
   opacity: 0;
 }
 
-.slide-up-enter-active,
-.slide-up-leave-active {
-  transition: all 0.3s ease;
-}
-
 .slide-up-enter-from {
-  transform: translateY(20px);
+  transform: scale(0.98) translateY(20px);
   opacity: 0;
 }
 
 .slide-up-leave-to {
-  transform: translateY(-20px);
+  transform: scale(0.98) translateY(-20px);
   opacity: 0;
 }
 
-/* 图表样式 */
-.chart-container {
-  @apply relative w-full h-64 p-4;
-}
-
-/* 知识图谱样式 */
-.graph-container {
-  @apply relative w-full bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700;
-}
-
-.graph-node {
-  @apply cursor-pointer;
-}
-
-.graph-node:hover {
-  @apply opacity-80;
-}
-
-/* 响应式工具类 */
 @media (max-width: 640px) {
   .mobile-hidden {
     @apply hidden;
   }
 }
 
-/* 暗色模式平滑过渡 */
 * {
-  transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease, transform 0.2s ease;
+  transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease;
 }
-
