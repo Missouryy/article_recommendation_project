@@ -1,0 +1,197 @@
+<template>
+  <div class="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900 py-12 px-4 sm:px-6 lg:px-8 animate-fade-in">
+    <div class="max-w-md w-full space-y-8 animate-scale-in">
+      <div>
+        <div class="mx-auto h-12 w-12 bg-gradient-to-r from-blue-500 to-purple-600 rounded-lg"></div>
+        <h2 class="mt-6 text-center text-3xl font-extrabold text-gray-900 dark:text-white">
+          创建账户
+        </h2>
+        <p class="mt-2 text-center text-sm text-gray-600 dark:text-gray-400">
+          已有账户？
+          <router-link to="/login" class="font-medium text-blue-600 hover:text-blue-500 dark:text-blue-400">
+            立即登录
+          </router-link>
+        </p>
+      </div>
+      
+      <form class="mt-8 space-y-6" @submit.prevent="handleRegister">
+        <div v-if="userStore.error" class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
+          {{ userStore.error }}
+        </div>
+        
+        <div class="space-y-4">
+          <div>
+            <label for="username" class="label">用户名</label>
+            <input
+              id="username"
+              v-model="form.username"
+              type="text"
+              required
+              class="input"
+              placeholder="请输入用户名"
+            >
+          </div>
+          
+          <div>
+            <label for="email" class="label">邮箱</label>
+            <input
+              id="email"
+              v-model="form.email"
+              type="email"
+              required
+              class="input"
+              placeholder="请输入邮箱地址"
+            >
+          </div>
+          
+          <div>
+            <label for="full_name" class="label">姓名</label>
+            <input
+              id="full_name"
+              v-model="form.full_name"
+              type="text"
+              required
+              class="input"
+              placeholder="请输入真实姓名"
+            >
+          </div>
+          
+          <div>
+            <label for="affiliation" class="label">所属机构</label>
+            <input
+              id="affiliation"
+              v-model="form.affiliation"
+              type="text"
+              class="input"
+              placeholder="请输入所属机构（可选）"
+            >
+          </div>
+          
+          <div>
+            <label for="password" class="label">密码</label>
+            <div class="relative">
+              <input
+                id="password"
+                v-model="form.password"
+                :type="showPassword ? 'text' : 'password'"
+                required
+                class="input pr-10"
+                placeholder="请输入密码"
+              >
+              <button
+                type="button"
+                @click="togglePasswordVisibility"
+                class="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+              >
+                <svg v-if="showPassword" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                </svg>
+                <svg v-else class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.878 9.878L6.636 6.636m3.242 3.242L12 12m0 0l3.242 3.242" />
+                </svg>
+              </button>
+            </div>
+          </div>
+          
+          <div>
+            <label for="confirm_password" class="label">确认密码</label>
+            <input
+              id="confirm_password"
+              v-model="form.confirm_password"
+              type="password"
+              required
+              class="input"
+              placeholder="请再次输入密码"
+            >
+          </div>
+        </div>
+
+        <div class="flex items-center">
+          <input
+            id="agree"
+            v-model="form.agree"
+            type="checkbox"
+            required
+            class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+          >
+          <label for="agree" class="ml-2 block text-sm text-gray-900 dark:text-gray-300">
+            我同意
+            <a href="#" class="text-blue-600 hover:text-blue-500 dark:text-blue-400">服务条款</a>
+            和
+            <a href="#" class="text-blue-600 hover:text-blue-500 dark:text-blue-400">隐私政策</a>
+          </label>
+        </div>
+
+        <div>
+          <button
+            type="submit"
+            :disabled="userStore.loading || !isFormValid"
+            class="group relative w-full flex justify-center py-3 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-gradient-to-r from-primary-600 to-accent-600 hover:from-primary-700 hover:to-accent-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-50 disabled:cursor-not-allowed active:scale-[0.99]"
+          >
+            <span v-if="userStore.loading" class="spinner mr-2"></span>
+            {{ userStore.loading ? '注册中...' : '注册' }}
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</template>
+
+<script setup lang="ts">
+import { ref, computed } from 'vue'
+import { useRouter } from 'vue-router'
+import { useUserStore } from '@/stores/user'
+
+const router = useRouter()
+const userStore = useUserStore()
+
+const form = ref({
+  username: '',
+  email: '',
+  full_name: '',
+  affiliation: '',
+  password: '',
+  confirm_password: '',
+  agree: false,
+  research_interests: []
+})
+
+const showPassword = ref(false)
+
+const togglePasswordVisibility = () => {
+  showPassword.value = !showPassword.value
+}
+
+const isFormValid = computed(() => {
+  return form.value.password === form.value.confirm_password && 
+         form.value.agree &&
+         form.value.username &&
+         form.value.email &&
+         form.value.full_name &&
+         form.value.password
+})
+
+const handleRegister = async () => {
+  if (!isFormValid.value) {
+    return
+  }
+  
+  try {
+    await userStore.register({
+      username: form.value.username,
+      email: form.value.email,
+      full_name: form.value.full_name,
+      affiliation: form.value.affiliation,
+      password: form.value.password,
+      research_interests: form.value.research_interests
+    })
+    
+    // 注册成功后重定向到首页
+    router.push('/')
+  } catch (error) {
+    // 错误已在store中处理
+  }
+}
+</script>
+
