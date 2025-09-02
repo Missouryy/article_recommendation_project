@@ -1,28 +1,24 @@
 <template>
   <div id="app" :class="{ 'dark': isDark }">
     <div class="min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors duration-300">
-      <!-- 导航栏 -->
       <nav class="bg-white dark:bg-gray-800 shadow-lg border-b border-gray-200 dark:border-gray-700 animate-fade-in">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div class="flex justify-between h-16">
             <div class="flex items-center">
-              <!-- Logo -->
               <router-link to="/" class="flex-shrink-0 flex items-center">
                 <img src="@/assets/logo.png" alt="Logo" class="h-8 w-8 rounded-lg mr-3 shadow-md" />
                 <span class="font-bold text-xl text-gray-900 dark:text-white">学术推荐</span>
               </router-link>
               
-              <!-- 主导航 -->
               <div class="hidden md:ml-10 md:flex md:space-x-8">
-                 <router-link to="/search" class="nav-link">智能搜索</router-link>
-                 <router-link to="/papers" class="nav-link">论文库</router-link>
-                 <router-link to="/authors" class="nav-link">学者</router-link>
+                 <a @click="handleNavReset('Search', '/search')" class="nav-link cursor-pointer">智能搜索</a>
+                 <a @click="handleNavReset('Papers', '/papers')" class="nav-link cursor-pointer">论文库</a>
+                 <router-link to="/authors" class="nav-link">学者库</router-link>
                  <router-link to="/workspace" class="nav-link">工作台</router-link>
                </div>
             </div>
             
             <div class="flex items-center space-x-4">
-              <!-- 暗色模式切换 -->
               <button
                 @click="toggleDarkMode"
                 class="p-2 rounded-lg text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white transition-colors hover:bg-gray-100/60 dark:hover:bg-gray-700/60"
@@ -35,13 +31,11 @@
                 </svg>
               </button>
               
-              <!-- 用户菜单 -->
               <div v-if="userStore.isAuthenticated" class="relative">
                 <button
                   @click="showUserMenu = !showUserMenu"
                   class="flex items-center text-sm rounded-full focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
                 >
-                  <!-- 使用CSS生成的头像，不依赖图片文件 -->
                   <div class="h-8 w-8 rounded-full bg-gray-300 flex items-center justify-center text-gray-600 text-sm font-medium">
                     {{ userStore.userInitials || 'U' }}
                   </div>
@@ -63,18 +57,16 @@
         </div>
       </nav>
       
-      <!-- 主内容区域 -->
       <main class="flex-1">
         <router-view v-slot="{ Component }">
           <transition name="fade" mode="out-in">
-            <keep-alive include="Search,Papers">
+            <keep-alive :include="keepAliveInclude">
               <component :is="Component" />
             </keep-alive>
           </transition>
         </router-view>
       </main>
       
-      <!-- 全局通知 -->
       <div v-if="notification.show" class="fixed top-4 right-4 z-50">
         <div :class="notificationClasses" class="px-4 py-3 rounded-lg shadow-lg animate-scale-in">
           <p class="text-sm font-medium">{{ notification.message }}</p>
@@ -85,10 +77,12 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, nextTick } from 'vue'
+import { useRouter } from 'vue-router'
 import { useUserStore } from './stores/user'
 import { useThemeStore } from './stores/theme'
 
+const router = useRouter()
 const userStore = useUserStore()
 const themeStore = useThemeStore()
 
@@ -99,6 +93,9 @@ const notification = ref({
   type: 'success'
 })
 
+// 创建一个 ref 来动态控制 keep-alive 列表
+const keepAliveInclude = ref(['Search', 'Papers'])
+
 const isDark = computed(() => themeStore.isDark)
 
 const notificationClasses = computed(() => ({
@@ -107,6 +104,16 @@ const notificationClasses = computed(() => ({
   'bg-yellow-500 text-white': notification.value.type === 'warning',
   'bg-blue-500 text-white': notification.value.type === 'info'
 }))
+
+const handleNavReset = async (componentName: string, path: string) => {
+  keepAliveInclude.value = keepAliveInclude.value.filter(name => name !== componentName)
+  await nextTick()
+
+  if (!keepAliveInclude.value.includes(componentName)) {
+    keepAliveInclude.value.push(componentName)
+  }
+  router.push(path)
+}
 
 const toggleDarkMode = () => {
   themeStore.toggleDarkMode()
@@ -123,7 +130,7 @@ onMounted(() => {
 })
 </script>
 
-<style scoped>
+<style lang="postcss" scoped>
 .nav-link {
   @apply text-gray-500 hover:text-gray-900 dark:text-gray-300 dark:hover:text-white px-3 py-2 rounded-md text-base font-semibold transition-colors;
 }
