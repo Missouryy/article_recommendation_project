@@ -44,8 +44,8 @@ async def search_papers(search_request: SearchRequest, current_user: Optional[Us
         sort_order=search_request.sort_order
     )
     
-    # 如果用户已登录，应用个性化重排序
-    if current_user:
+    # 如果用户已登录，仅在按相关度排序时应用个性化重排序
+    if current_user and search_request.sort_by == "relevance":
         user_data = await user_manager.get_user_by_id(current_user.id)
         if user_data:
             sorted_results = rerank_search_results(
@@ -53,7 +53,6 @@ async def search_papers(search_request: SearchRequest, current_user: Optional[Us
                 results=sorted_results,
                 user_data=user_data
             )
-            
             # 记录搜索历史
             await user_manager.add_search_history(current_user.id, search_request.query)
     
@@ -211,9 +210,12 @@ async def clear_search_history(current_user: User = Depends(get_current_user)):
 async def perform_search(query: str, search_type: str = "hybrid", filters: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
     """
     执行搜索逻辑
+    - hybrid: 使用数据库的加权混合相关度
+    - semantic/exact: 暂时回退到加权混合（可扩展至向量语义/精确匹配）
     """
-    # 直接使用数据库的搜索功能
-    return await db.search_papers(query, filters)
+    # 当前三个模式均走统一的加权混合召回+打分
+    results = await db.search_papers(query, filters)
+    return results
 
 def hybrid_search(query: str, filters: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
     """

@@ -1,6 +1,6 @@
 <template>
   <div class="min-h-screen bg-gray-50 dark:bg-gray-900 animate-fade-in">
-    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 flex-col justify-center items-center min-h-[60vh]">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 pb-28 flex-col justify-center items-center min-h-[60vh]">
       <!-- 搜索头部 -->
       <div :class="!searched ? 'w-full flex flex-col items-center justify-center flex-1 min-h-[60vh]' : 'w-full flex flex-col items-center justify-center'">
         <h1
@@ -11,19 +11,19 @@
           <div class="relative flex items-center w-full max-w-2xl">
             <input
               v-model="searchQuery"
-              @keyup.enter="handleSearch"
+              @keyup.enter="handleSearch(true)"
               type="text"
               placeholder="搜索论文、作者或关键词..."
-              class="input w-full px-7 py-5 pr-24 text-xl rounded-2xl bg-white dark:bg-gray-800 shadow-xl border border-blue-300 dark:border-blue-500 focus:border-blue-500 focus:ring-2 focus:ring-blue-400 text-gray-900 dark:text-white placeholder:text-gray-400 dark:placeholder:text-gray-500 font-sans"
+              class="input w-full px-7 py-5 pr-24 text-xl rounded-2xl bg-white/80 dark:bg-gray-800/80 shadow-xl border border-blue-300 dark:border-blue-500 focus:border-blue-500 focus:ring-2 focus:ring-blue-400 text-gray-900 dark:text-white placeholder:text-gray-400 dark:placeholder:text-gray-500 font-sans"
               style="font-family: -apple-system, BlinkMacSystemFont, 'San Francisco', 'Helvetica Neue', Arial, sans-serif;"
             >
             <button
-              @click="handleSearch"
+              @click="handleSearch(true)"
               :disabled="loading"
-              class="absolute right-3 top-1/2 h-12 px-8 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-lg font-bold shadow-lg transition-colors flex items-center justify-center"
+              class="absolute right-3 top-1/2 h-12 px-6 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-lg font-bold shadow-lg transition-colors flex items-center justify-center w-24"
               style="font-family: inherit; transform: translateY(-50%);"
             >
-              {{ loading ? '搜索中...' : '搜索' }}
+              {{ loading ? '...' : '搜索' }}
             </button>
           </div>
         </div>
@@ -31,19 +31,19 @@
           <div class="relative flex items-center w-full max-w-2xl">
             <input
               v-model="searchQuery"
-              @keyup.enter="handleSearch"
+              @keyup.enter="handleSearch(true)"
               type="text"
               placeholder="搜索论文、作者或关键词..."
               class="input w-full px-7 py-5 pr-24 text-xl rounded-2xl bg-white/80 dark:bg-gray-800/80 shadow-xl border border-blue-300 dark:border-blue-500 focus:border-blue-500 focus:ring-2 focus:ring-blue-400 text-gray-900 dark:text-white placeholder:text-gray-400 dark:placeholder:text-gray-500 font-sans"
               style="font-family: -apple-system, BlinkMacSystemFont, 'San Francisco', 'Helvetica Neue', Arial, sans-serif;"
             >
             <button
-              @click="handleSearch"
+              @click="handleSearch(true)"
               :disabled="loading"
-              class="absolute right-3 top-1/2 h-12 px-8 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-lg font-bold shadow-lg transition-colors flex items-center justify-center"
+              class="absolute right-3 top-1/2 h-12 px-6 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-lg font-bold shadow-lg transition-colors flex items-center justify-center w-24"
               style="font-family: inherit; transform: translateY(-50%);"
             >
-              {{ loading ? '搜索中...' : '搜索' }}
+              {{ loading ? '...' : '搜索' }}
             </button>
           </div>
         </div>
@@ -54,8 +54,33 @@
         <template v-if="searchResults.length > 0">
           <div class="mt-0">
             <div class="mb-8">
-              <h1 class="text-3xl font-bold text-gray-900 dark:text-white mb-2">搜索结果</h1>
-              <p class="text-gray-600 dark:text-gray-300">找到 {{ totalResults }} 篇相关论文</p>
+              <div class="flex items-center justify-between flex-wrap gap-4">
+                <div>
+                  <h1 class="text-3xl font-bold text-gray-900 dark:text-white mb-1">搜索结果</h1>
+                  <p class="text-gray-600 dark:text-gray-300">找到 {{ totalResults }} 篇相关论文</p>
+                </div>
+                <div class="flex items-center space-x-3">
+                  <select 
+                      v-model="sortBy" 
+                      @change="handleSearch(true)" 
+                      class="pl-4 pr-9 py-2.5 rounded-xl bg-white dark:bg-gray-800 border border-blue-300 dark:border-blue-500 hover:border-blue-500 dark:hover:border-blue-400 text-gray-900 dark:text-white transition-colors"
+                  >
+                      <option value="relevance">相关度</option>
+                      <option value="date">日期</option>
+                      <option value="citation">引用数</option>
+                      <option value="truth_value">真值</option>
+                  </select>
+
+                  <select 
+                      v-model="sortOrder" 
+                      @change="handleSearch(true)" 
+                      class="pl-4 pr-9 py-2.5 rounded-xl bg-white dark:bg-gray-800 border border-blue-300 dark:border-blue-500 hover:border-blue-500 dark:hover:border-blue-400 text-gray-900 dark:text-white transition-colors"
+                  >
+                      <option value="desc">降序</option>
+                      <option value="asc">升序</option>
+                  </select>
+                </div>
+              </div>
             </div>
             <div class="grid gap-6">
               <div
@@ -81,6 +106,19 @@
                 </div>
               </div>
             </div>
+            <div v-if="totalPages > 1" class="mt-10 flex items-center justify-center space-x-4">
+              <button
+                @click="prevPage"
+                :disabled="currentPage <= 1 || loading"
+                class="h-12 px-6 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-base font-bold shadow-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >上一页</button>
+              <span class="text-gray-700 dark:text-gray-300">第 {{ currentPage }} / {{ totalPages }} 页</span>
+              <button
+                @click="nextPage"
+                :disabled="currentPage >= totalPages || loading"
+                class="h-12 px-6 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-base font-bold shadow-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >下一页</button>
+            </div>
           </div>
         </template>
         <template v-else-if="searched && !loading && searchResults.length === 0">
@@ -95,7 +133,7 @@
 
 <script setup lang="ts">
 defineOptions({ name: 'Search' })
-import { ref, onMounted, onActivated } from 'vue'
+import { ref, onMounted, onActivated, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { api } from '@/services/api'
 import type { Paper } from '@/types'
@@ -107,6 +145,11 @@ const searchResults = ref<Paper[]>([])
 const totalResults = ref(0)
 const loading = ref(false)
 const searched = ref(false)
+const pageSize = ref(20)
+const currentPage = ref(1)
+const totalPages = computed(() => Math.max(1, Math.ceil(totalResults.value / pageSize.value)))
+const sortBy = ref<'relevance' | 'date' | 'citation' | 'truth_value'>('relevance')
+const sortOrder = ref<'asc' | 'desc'>('desc')
 
 let lastScrollTop = 0
 
@@ -121,19 +164,37 @@ onActivated(() => {
   }
 })
 
-const handleSearch = async () => {
+const updateRouteQuery = () => {
+  router.replace({
+    path: route.path,
+    query: {
+      ...route.query,
+      q: searchQuery.value,
+      page: String(currentPage.value),
+      sort_by: sortBy.value,
+      sort_order: sortOrder.value,
+    },
+  })
+}
+
+const handleSearch = async (resetPage = false) => {
   if (!searchQuery.value.trim()) return
+  if (resetPage) currentPage.value = 1
   searched.value = true
   try {
     loading.value = true
     const response = await api.search.papers({
       query: searchQuery.value,
       search_type: 'hybrid',
-      limit: 20
+      limit: pageSize.value,
+      offset: (currentPage.value - 1) * pageSize.value,
+      sort_by: sortBy.value,
+      sort_order: sortOrder.value,
     })
 
     searchResults.value = response.data.papers
     totalResults.value = response.data.total
+    updateRouteQuery()
   } catch (error) {
     console.error('搜索失败:', error)
   } finally {
@@ -141,12 +202,34 @@ const handleSearch = async () => {
   }
 }
 
+const nextPage = async () => {
+  if (currentPage.value >= totalPages.value) return
+  currentPage.value += 1
+  await handleSearch(false)
+}
+
+const prevPage = async () => {
+  if (currentPage.value <= 1) return
+  currentPage.value -= 1
+  await handleSearch(false)
+}
+
 onMounted(() => {
   const q = route.query.q as string
+  const pageParam = Number(route.query.page || 1)
+  const sortByParam = (route.query.sort_by as string) || 'relevance'
+  const sortOrderParam = (route.query.sort_order as string) || 'desc'
   if (q) {
     searchQuery.value = q
+    currentPage.value = Number.isFinite(pageParam) && pageParam > 0 ? pageParam : 1
+    if (['relevance', 'date', 'citation', 'truth_value'].includes(sortByParam)) {
+      sortBy.value = sortByParam as any
+    }
+    if (['asc', 'desc'].includes(sortOrderParam)) {
+      sortOrder.value = sortOrderParam as any
+    }
     searched.value = true
-    handleSearch()
+    handleSearch(false)
   }
 })
 </script>

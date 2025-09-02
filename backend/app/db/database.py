@@ -12,6 +12,7 @@ from datetime import datetime
 import asyncio
 from pathlib import Path
 import logging
+import math
 
 # 配置日志
 logging.basicConfig(level=logging.INFO)
@@ -221,27 +222,163 @@ class RealDatabase:
             await db.close()
     
     async def search_papers(self, query: str, filters: Dict = None) -> List[Dict[str, Any]]:
-        """搜索论文"""
+        """搜索论文：加权混合相关度（标题/作者/关键词/摘要/期刊等）"""
         db = await self.connection.get_connection()
         try:
-            search_query = f"%{query.lower()}%"
-            
-            sql = """
+            query_normalized = (query or "").strip().lower()
+            if not query_normalized:
+                return []
+
+            # 将查询拆分为词元（空格切分），用于更广的候选召回
+            tokens = [t for t in query_normalized.split() if t]
+            like_params: List[str] = []
+
+            # 动态构造 WHERE 子句：对每个 token 在多个字段 OR 匹配
+            fields = [
+                "LOWER(title)",
+                "LOWER(abstract)",
+                "LOWER(author_names)",  # JSON字符串，低成本LIKE
+                "LOWER(keywords)",      # JSON字符串，低成本LIKE
+                "LOWER(journal)"
+            ]
+
+            where_clauses: List[str] = []
+            if tokens:
+                for token in tokens:
+                    token_like = f"%{token}%"
+                    # 为该token构造 (field1 LIKE ? OR field2 LIKE ? ...)
+                    token_sub = " OR ".join(f"{f} LIKE ?" for f in fields)
+                    where_clauses.append(f"({token_sub})")
+                    like_params.extend([token_like] * len(fields))
+            else:
+                # 兜底：使用整句
+                token_like = f"%{query_normalized}%"
+                token_sub = " OR ".join(f"{f} LIKE ?" for f in fields)
+                where_clauses.append(f"({token_sub})")
+                like_params.extend([token_like] * len(fields))
+
+            where_sql = " OR ".join(where_clauses)
+
+            sql = f"""
                 SELECT id, short_id, title, authors, author_names, year, journal, abstract, keywords, doi,
                        citation_count, download_count, url, reference_ids, cited_by, research_field, funding,
                        journal_issn, host_organization_name, author_orcids, author_institutions, author_countries,
                        fwci, citation_percentile, publication_date, primary_topic, topics, keywords_display, domain, crawl_timestamp
                 FROM works 
-                WHERE LOWER(title) LIKE ? OR LOWER(abstract) LIKE ?
+                WHERE {where_sql}
                 ORDER BY citation_count DESC
-                LIMIT 100
+                LIMIT 500
             """
-            
-            async with db.execute(sql, (search_query, search_query)) as cursor:
+
+            async with db.execute(sql, like_params) as cursor:
                 rows = await cursor.fetchall()
-                return [self._format_paper_data(row) for row in rows if row]
+
+            # 计算加权相关度
+            results: List[Dict[str, Any]] = []
+            full_phrase = query_normalized
+            for row in rows:
+                paper = self._format_paper_data(row)
+                if not paper:
+                    continue
+
+                title_text = (paper.get("title") or "").lower()
+                abstract_text = (paper.get("abstract") or "").lower()
+                journal_text = (paper.get("journal") or "").lower()
+                author_names_list = paper.get("author_names") or []
+                keywords_list = paper.get("keywords") or []
+                author_text = " ".join([a.lower() for a in author_names_list])
+                keywords_text = " ".join([k.lower() for k in keywords_list])
+
+                relevance_score: float = 0.0
+
+                # token 逐字段加权
+                for token in tokens if tokens else [full_phrase]:
+                    if token in title_text:
+                        relevance_score += 3.0
+                    if token in author_text:
+                        relevance_score += 2.0
+                    if token in keywords_text:
+                        relevance_score += 2.5
+                    if token in abstract_text:
+                        relevance_score += 1.5
+                    if token in journal_text:
+                        relevance_score += 1.0
+
+                # 短语匹配加分
+                if full_phrase and full_phrase in title_text:
+                    relevance_score += 3.0
+                if full_phrase and full_phrase in abstract_text:
+                    relevance_score += 2.0
+                if full_phrase and full_phrase in keywords_text:
+                    relevance_score += 2.0
+
+                # 时效性与影响力
+                current_year = datetime.now().year
+                year_value = paper.get("year") or 0
+                if isinstance(year_value, int) and year_value > 0:
+                    years_old = max(0, current_year - year_value)
+                    recency_bonus = max(0.0, 2.0 - years_old * 0.2)
+                    relevance_score += recency_bonus
+
+                citation_count = paper.get("citation_count") or 0
+                try:
+                    citation_bonus = min(2.0, math.log(citation_count + 1) * 0.5)
+                except ValueError:
+                    citation_bonus = 0.0
+                relevance_score += citation_bonus
+
+                if relevance_score <= 0:
+                    # 保留极少数完全未匹配的候选为0分（通常不会发生）
+                    continue
+
+                paper["relevance_score"] = round(relevance_score, 4)
+                results.append(paper)
+
+            # 应用过滤（在结果层做，避免过早过滤导致召回不足）
+            if filters:
+                results = self._apply_filters(results, filters)
+
+            return results
         finally:
             await db.close()
+
+    def _apply_filters(self, results: List[Dict[str, Any]], filters: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """在已召回结果上应用过滤条件（与API层保持一致的语义）"""
+        filtered_results = list(results)
+
+        # 年份过滤
+        if filters.get("year_min") is not None:
+            filtered_results = [r for r in filtered_results if (r.get("year") or 0) >= filters["year_min"]]
+        if filters.get("year_max") is not None:
+            filtered_results = [r for r in filtered_results if (r.get("year") or 0) <= filters["year_max"]]
+
+        # 期刊过滤
+        if filters.get("journals"):
+            journal_names = {str(j).lower() for j in filters["journals"]}
+            filtered_results = [r for r in filtered_results if (r.get("journal") or "").lower() in journal_names]
+
+        # 研究领域过滤
+        if filters.get("research_fields"):
+            field_names = {str(f).lower() for f in filters["research_fields"]}
+            filtered_results = [r for r in filtered_results if (r.get("research_field") or "").lower() in field_names]
+
+        # 最小引用数
+        if filters.get("min_citations") is not None:
+            filtered_results = [r for r in filtered_results if (r.get("citation_count") or 0) >= filters["min_citations"]]
+
+        # 最小真值分数
+        if filters.get("min_truth_value") is not None:
+            filtered_results = [r for r in filtered_results if (r.get("truth_value_score") or 0) >= filters["min_truth_value"]]
+
+        # 作者过滤（按名称）
+        if filters.get("authors"):
+            author_names = {str(a).lower() for a in filters["authors"]}
+            filtered_results = [
+                r for r in filtered_results
+                if any((str(author).lower() in author_names) for author in (r.get("author_names") or []))
+            ]
+
+        return filtered_results
     
     async def get_papers_by_author(self, author_name: str, limit: int = 10) -> List[Dict[str, Any]]:
         """根据作者姓名获取论文"""
