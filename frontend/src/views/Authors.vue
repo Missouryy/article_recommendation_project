@@ -12,7 +12,7 @@
           v-for="author in authors"
           :key="author.id"
           class="card-hover p-6 cursor-pointer"
-          @click="$router.push(`/authors/${author.id}`)"
+          @click="$router.push(`/authors/${encodeURIComponent(author.id)}`)"
         >
           <div class="text-center">
             <div class="w-16 h-16 mx-auto mb-4 bg-blue-600 rounded-full flex items-center justify-center">
@@ -28,11 +28,6 @@
             <p class="text-sm text-gray-600 dark:text-gray-400 mb-3">
               {{ author.affiliation }}
             </p>
-            
-            <div class="flex justify-center space-x-4 text-sm text-gray-500">
-              <span>H指数: {{ author.h_index }}</span>
-              <span>论文: {{ author.paper_count }}</span>
-            </div>
             
             <div class="mt-3 flex flex-wrap justify-center gap-1">
               <span
@@ -59,6 +54,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { api } from '@/services/api'
+import type { Author } from '@/types'
 
 const authors = ref<Author[]>([])
 const loading = ref(false)

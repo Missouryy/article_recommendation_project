@@ -126,7 +126,7 @@ const getInitials = (name: string) => {
 const fetchAuthor = async () => {
   try {
     loading.value = true
-    const authorId = route.params.id as string
+    const authorId = decodeURIComponent(route.params.id as string)
 
     const [authorRes, papersRes] = await Promise.all([
       api.authors.get(authorId),
@@ -162,7 +162,7 @@ const toggleFollow = async () => {
   }
   
   try {
-    const authorId = route.params.id as string
+    const authorId = decodeURIComponent(route.params.id as string)
     
     if (isFollowing.value) {
       await api.authors.unfollow(authorId)

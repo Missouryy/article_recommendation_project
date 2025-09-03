@@ -13,6 +13,7 @@ import asyncio
 from pathlib import Path
 import logging
 import math
+import time
 
 # 配置日志
 logging.basicConfig(level=logging.INFO)
@@ -89,6 +90,10 @@ class RealDatabase:
     
     def __init__(self):
         self.connection = DatabaseConnection()
+        # 作者信息简单缓存，降低重复详情请求的计算与IO
+        self._author_info_cache: Dict[str, Dict[str, Any]] = {}
+        self._author_info_cache_ts: Dict[str, float] = {}
+        self._author_info_cache_ttl_seconds: int = 1800  # 30分钟
     
     def _format_paper_data(self, row) -> Dict[str, Any]:
         """格式化论文数据"""
@@ -120,7 +125,25 @@ class RealDatabase:
                     authors.append(author['author_id'])
                 elif isinstance(author, str):
                     authors.append(author)
-        
+
+        # 处理author_names字段（可能是JSON数组或以分号/逗号分隔的纯文本）
+        author_names_value = safe_get(row, 4)
+        author_names = safe_json_loads(author_names_value)
+        if not author_names:
+            # 当为纯文本时，尝试以分号或逗号拆分
+            if isinstance(author_names_value, str) and author_names_value.strip():
+                separator = ';' if ';' in author_names_value else ','
+                author_names = [name.strip() for name in author_names_value.split(separator) if name and name.strip()]
+            # 如果仍为空，回退从authors_raw中提取name
+            if not author_names and authors_raw:
+                extracted_names = []
+                for author in authors_raw:
+                    if isinstance(author, dict) and 'name' in author and author['name']:
+                        extracted_names.append(str(author['name']).strip())
+                    elif isinstance(author, str) and author.strip():
+                        extracted_names.append(author.strip())
+                author_names = extracted_names
+
         # 处理topics字段，确保返回字典列表
         topics_raw = safe_json_loads(safe_get(row, 26))  # topics列的正确索引
         topics = []
@@ -136,7 +159,7 @@ class RealDatabase:
             "short_id": safe_get(row, 1),
             "title": safe_get(row, 2, ""),
             "authors": authors,
-            "author_names": safe_json_loads(safe_get(row, 4)),
+            "author_names": author_names,
             "year": safe_get(row, 5, 0),
             "journal": safe_get(row, 6, ""),
             "journal_impact_factor": None,  # 这个字段在数据库中不存在
@@ -403,7 +426,17 @@ class RealDatabase:
     
     async def get_author_info(self, author_name: str) -> Dict[str, Any] | None:
         """获取作者信息（通过聚合论文数据计算）"""
-        papers = await self.get_papers_by_author(author_name, limit=1000)
+        # 先查缓存
+        try:
+            cached = self._author_info_cache.get(author_name)
+            ts = self._author_info_cache_ts.get(author_name, 0)
+            if cached and (time.time() - ts) < self._author_info_cache_ttl_seconds:
+                return cached
+        except Exception:
+            pass
+
+        # 读取部分（最多300篇）即可得到稳定的统计且更快
+        papers = await self.get_papers_by_author(author_name, limit=300)
         
         if not papers:
             return None
@@ -421,28 +454,69 @@ class RealDatabase:
             else:
                 break
         
-        # 提取研究领域和机构信息
-        research_areas = set()
+        # 提取研究领域（频次统计）和机构信息
+        from collections import Counter
+        field_counter: Counter[str] = Counter()
+        generic_fields = {
+            "mathematics", "geometry", "geodesy", "geography", "philosophy", "epistemology",
+            "scaling", "linear scale", "simple (philosophy)", "spin (aerodynamics)", "physics"
+        }
+        def is_valid_field(name: str) -> bool:
+            n = (name or "").strip()
+            if len(n) < 3 or len(n) > 80:
+                return False
+            return n.lower() not in generic_fields
+        def within_word_limit(s: str) -> bool:
+            return len([w for w in s.split() if w]) <= 5
         affiliations = set()
         
         for paper in papers:
             if paper.get("research_field"):
-                research_areas.add(paper["research_field"])
+                name = str(paper["research_field"]).strip()
+                if name and is_valid_field(name):
+                    field_counter[name] += 1
             institutions = paper.get("author_institutions", [])
             if institutions:
                 for inst in institutions:
                     if isinstance(inst, str):
                         affiliations.add(inst)
+            # 兼容 primary_topic 和 topics.display_name
+            if paper.get("primary_topic"):
+                name = str(paper["primary_topic"]).strip()
+                if name and is_valid_field(name):
+                    field_counter[name] += 1
+            for t in (paper.get("topics") or []):
+                name = t.get("display_name") if isinstance(t, dict) else None
+                level = t.get("level") if isinstance(t, dict) else None
+                if isinstance(name, str):
+                    clean = name.strip()
+                    if clean and is_valid_field(clean) and isinstance(level, int) and level >= 1:
+                        field_counter[clean] += 1
         
-        return {
+        # 选择出现频次最高的前5个研究领域，且每个不超过5个单词
+        top_fields = [n for n, _ in field_counter.most_common(20) if within_word_limit(n)][:5]
+
+        affiliation_str = "、".join(list(affiliations)[:3]) if affiliations else ""
+        result = {
+            "id": author_name.replace(' ', '_'),
             "name": author_name,
-            "affiliation": list(affiliations)[:3] if affiliations else [],
-            "research_areas": list(research_areas)[:5],
+            "affiliation": affiliation_str,
+            "research_areas": top_fields,
             "h_index": h_index,
             "citation_count": total_citations,
             "paper_count": total_papers,
-            "papers": papers[:10]  # 返回前10篇论文
+            "created_at": datetime.now().isoformat(),
+            "career_timeline": [],
+            "collaboration_network": []
         }
+
+        # 写入缓存
+        try:
+            self._author_info_cache[author_name] = result
+            self._author_info_cache_ts[author_name] = time.time()
+        except Exception:
+            pass
+        return result
     
     async def get_research_fields_stats(self) -> Dict[str, Any]:
         """获取研究领域统计"""

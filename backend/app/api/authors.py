@@ -8,6 +8,7 @@ from ..models.paper import Author, AuthorSummary, PaperSummary
 from ..models.user import User
 from ..api.auth import get_current_user
 from ..db.database import db, user_manager
+from collections import Counter
 
 router = APIRouter(prefix="/authors", tags=["作者"])
 
@@ -45,13 +46,28 @@ async def search_authors(
                 
                 if paper.get("host_organization"):
                     authors_data[author_name]["affiliations"].add(paper["host_organization"])
+                # 研究领域：综合 research_field、primary_topic 以及 topics.display_name
                 if paper.get("research_field"):
                     authors_data[author_name]["research_fields"].add(paper["research_field"])
                 if paper.get("primary_topic"):
                     authors_data[author_name]["research_fields"].add(paper["primary_topic"])
+                for t in (paper.get("topics") or []):
+                    name = t.get("display_name") if isinstance(t, dict) else None
+                    if name:
+                        authors_data[author_name]["research_fields"].add(name)
     
-    # 转换为AuthorSummary格式
+    # 转换为AuthorSummary格式（研究领域按出现频次排序）
     author_summaries = []
+    # 通用无效/过泛标签集合（小写比较）
+    generic_fields = {
+        "mathematics", "geometry", "geodesy", "geography", "philosophy", "epistemology",
+        "scaling", "linear scale", "simple (philosophy)", "spin (aerodynamics)", "physics"
+    }
+    def is_valid_field(name: str) -> bool:
+        n = (name or "").strip()
+        if len(n) < 3 or len(n) > 80:
+            return False
+        return n.lower() not in generic_fields
     for author_name, data in list(authors_data.items())[:limit]:
         # 计算简化的h-index
         citations_list = sorted([p.get("citation_count", 0) for p in data["papers"]], reverse=True)
@@ -61,12 +77,28 @@ async def search_authors(
                 h_index = i
             else:
                 break
+        # 统计研究领域频次
+        field_counter: Counter[str] = Counter()
+        for p in data["papers"]:
+            for value in [p.get("research_field"), p.get("primary_topic")]:
+                if isinstance(value, str) and is_valid_field(value):
+                    field_counter[value.strip()] += 1
+            for t in (p.get("topics") or []):
+                if isinstance(t, dict):
+                    name = t.get("display_name")
+                    level = t.get("level")
+                    if isinstance(name, str) and is_valid_field(name) and isinstance(level, int) and level >= 1:
+                        field_counter[name.strip()] += 1
+        # 限制每个标签不超过5个单词
+        def within_word_limit(s: str) -> bool:
+            return len([w for w in s.split() if w]) <= 5
+        top_fields = [name for name, _ in field_counter.most_common(20) if within_word_limit(name)][:5]
         
         summary = AuthorSummary(
-            id=f"author_{author_name.replace(' ', '_')}",
+            id=author_name.replace(' ', '_'),
             name=author_name,
             affiliation=list(data["affiliations"])[0] if data["affiliations"] else "",
-            research_areas=list(data["research_fields"])[:5],  # 前5个研究领域
+            research_areas=top_fields,  # 前5个研究领域（按频次）
             h_index=h_index,
             citation_count=data["total_citations"],
             paper_count=len(data["papers"])
@@ -336,11 +368,27 @@ async def get_popular_authors(
             
             if paper.get("host_organization"):
                 authors_data[author_name]["affiliations"].add(paper["host_organization"])
+            # 研究领域：综合 research_field、primary_topic 以及 topics.display_name
             if paper.get("research_field"):
                 authors_data[author_name]["research_fields"].add(paper["research_field"])
+            if paper.get("primary_topic"):
+                authors_data[author_name]["research_fields"].add(paper["primary_topic"])
+            for t in (paper.get("topics") or []):
+                name = t.get("display_name") if isinstance(t, dict) else None
+                if name:
+                    authors_data[author_name]["research_fields"].add(name)
     
-    # 转换为AuthorSummary并排序
+    # 转换为AuthorSummary（研究领域按出现频次排序）并排序
     author_summaries = []
+    generic_fields = {
+        "mathematics", "geometry", "geodesy", "geography", "philosophy", "epistemology",
+        "scaling", "linear scale", "simple (philosophy)", "spin (aerodynamics)", "physics"
+    }
+    def is_valid_field(name: str) -> bool:
+        n = (name or "").strip()
+        if len(n) < 3 or len(n) > 80:
+            return False
+        return n.lower() not in generic_fields
     for author_name, data in authors_data.items():
         if len(data["papers"]) < 2:  # 至少2篇论文
             continue
@@ -354,11 +402,27 @@ async def get_popular_authors(
             else:
                 break
         
+        # 统计研究领域频次
+        field_counter: Counter[str] = Counter()
+        for p in data["papers"]:
+            for value in [p.get("research_field"), p.get("primary_topic")]:
+                if isinstance(value, str) and is_valid_field(value):
+                    field_counter[value.strip()] += 1
+            for t in (p.get("topics") or []):
+                if isinstance(t, dict):
+                    name = t.get("display_name")
+                    level = t.get("level")
+                    if isinstance(name, str) and is_valid_field(name) and isinstance(level, int) and level >= 1:
+                        field_counter[name.strip()] += 1
+        def within_word_limit(s: str) -> bool:
+            return len([w for w in s.split() if w]) <= 5
+        top_fields = [name for name, _ in field_counter.most_common(20) if within_word_limit(name)][:5]
+
         summary = AuthorSummary(
-            id=f"author_{author_name.replace(' ', '_')}",
+            id=author_name.replace(' ', '_'),
             name=author_name,
             affiliation=list(data["affiliations"])[0] if data["affiliations"] else "",
-            research_areas=list(data["research_fields"])[:5],
+            research_areas=top_fields,
             h_index=h_index,
             citation_count=data["total_citations"],
             paper_count=len(data["papers"])
