@@ -189,15 +189,9 @@ const toggleBookmark = async () => {
   if (!userStore.isAuthenticated) {
     return
   }
-<<<<<<< HEAD
   
   try {
     const paperId = route.params.id as string
-    
-=======
-  try {
-    const paperId = route.params.id as string
->>>>>>> 8c6cd13 (fix: 修复了取消收藏的按钮不能正确显示的bug)
     if (isBookmarked.value) {
       await api.papers.unbookmark(paperId)
     } else {
