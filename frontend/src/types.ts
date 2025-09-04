@@ -1,5 +1,6 @@
 export interface Paper {
   id: string
+  short_id?: string
   title: string
   author_names: string[]
   year?: number | string

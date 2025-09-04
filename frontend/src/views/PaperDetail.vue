@@ -166,7 +166,10 @@ const fetchPaper = async () => {
       try {
         const bookmarksRes = await api.workspace.bookmarks({ limit: 1000 })
         const bookmarksList = Array.isArray(bookmarksRes.data) ? bookmarksRes.data : []
-        isBookmarked.value = paper.value ? bookmarksList.some(p => p.id === paper.value!.id) : false
+        isBookmarked.value = paper.value ? bookmarksList.some(p => 
+          p.id === paper.value!.id || 
+          (p.short_id && paper.value!.short_id && p.short_id === paper.value!.short_id)
+        ) : false
       } catch (e) {
         isBookmarked.value = false
       }
