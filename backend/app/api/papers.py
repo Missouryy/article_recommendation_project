@@ -265,3 +265,173 @@ async def get_citation_network(paper_id: str = Query(..., description="论文ID"
         citation_depth=2,
         influence_score=influence_score
     )
+
+@router.get("/citation-graph", response_model=GraphData, summary="获取引用关系图谱")
+async def get_citation_graph(
+    paper_id: str = Query(..., description="论文ID"),
+    depth: int = Query(2, description="引用关系深度，最大3层"),
+    max_nodes: int = Query(50, description="最大节点数量")
+):
+    """
+    获取论文的引用关系图谱数据
+    
+    - **paper_id**: 论文ID（作为查询参数）
+    - **depth**: 引用关系深度，最大3层
+    - **max_nodes**: 最大节点数量限制
+    """
+    if depth > 3:
+        depth = 3
+    
+    paper = await db.get_paper_by_id(paper_id)
+    if not paper:
+        raise HTTPException(status_code=404, detail="论文不存在")
+    
+    # 构建图数据
+    nodes = []
+    edges = []
+    processed_papers = set()
+    
+    # 添加中心节点（搜索的论文）
+    center_node = GraphNode(
+        id=paper_id,
+        label=paper["title"][:50] + "..." if len(paper["title"]) > 50 else paper["title"],
+        type="paper",
+        size=20.0,
+        color="#3B82F6",  # 蓝色，突出显示
+        metadata={
+            "title": paper["title"],
+            "authors": paper["author_names"],
+            "year": paper["year"],
+            "journal": paper["journal"],
+            "abstract": paper["abstract"],
+            "citation_count": paper["citation_count"]
+        }
+    )
+    nodes.append(center_node)
+    processed_papers.add(paper_id)
+    
+    # 获取引用该论文的论文（被引用关系）
+    cited_by = paper.get("cited_by", [])
+    for i, cite_id in enumerate(cited_by[:max_nodes//2]):
+        if len(nodes) >= max_nodes:
+            break
+            
+        cite_paper = await db.get_paper_by_id(cite_id)
+        if cite_paper and cite_id not in processed_papers:
+            node = GraphNode(
+                id=cite_id,
+                label=cite_paper["title"][:50] + "..." if len(cite_paper["title"]) > 50 else cite_paper["title"],
+                type="paper",
+                size=15.0,
+                color="#10B981",  # 绿色
+                metadata={
+                    "title": cite_paper["title"],
+                    "authors": cite_paper["author_names"],
+                    "year": cite_paper["year"],
+                    "journal": cite_paper["journal"],
+                    "abstract": cite_paper["abstract"],
+                    "citation_count": cite_paper["citation_count"]
+                }
+            )
+            nodes.append(node)
+            processed_papers.add(cite_id)
+            
+            # 添加边：引用论文 -> 被引用论文
+            edge = GraphEdge(
+                source=cite_id,
+                target=paper_id,
+                type="citation",
+                weight=1.0,
+                metadata={"relationship": "cites"}
+            )
+            edges.append(edge)
+    
+    # 获取该论文引用的论文（参考文献关系）
+    references = paper.get("references", [])
+    for i, ref_id in enumerate(references[:max_nodes//2]):
+        if len(nodes) >= max_nodes:
+            break
+            
+        ref_paper = await db.get_paper_by_id(ref_id)
+        if ref_paper and ref_id not in processed_papers:
+            node = GraphNode(
+                id=ref_id,
+                label=ref_paper["title"][:50] + "..." if len(ref_paper["title"]) > 50 else ref_paper["title"],
+                type="paper",
+                size=15.0,
+                color="#F59E0B",  # 橙色
+                metadata={
+                    "title": ref_paper["title"],
+                    "authors": ref_paper["author_names"],
+                    "year": ref_paper["year"],
+                    "journal": ref_paper["journal"],
+                    "abstract": ref_paper["abstract"],
+                    "citation_count": ref_paper["citation_count"]
+                }
+            )
+            nodes.append(node)
+            processed_papers.add(ref_id)
+            
+            # 添加边：论文 -> 参考文献
+            edge = GraphEdge(
+                source=paper_id,
+                target=ref_id,
+                type="citation",
+                weight=1.0,
+                metadata={"relationship": "references"}
+            )
+            edges.append(edge)
+    
+    # 如果深度允许，添加二级关系
+    if depth >= 2 and len(nodes) < max_nodes:
+        # 获取二级引用关系
+        for cite_id in cited_by[:10]:  # 限制数量
+            if len(nodes) >= max_nodes:
+                break
+                
+            cite_paper = await db.get_paper_by_id(cite_id)
+            if not cite_paper:
+                continue
+                
+            # 获取引用该论文的论文
+            second_level_cites = cite_paper.get("cited_by", [])
+            for second_id in second_level_cites[:5]:  # 限制数量
+                if len(nodes) >= max_nodes or second_id in processed_papers:
+                    continue
+                    
+                second_paper = await db.get_paper_by_id(second_id)
+                if second_paper:
+                    node = GraphNode(
+                        id=second_id,
+                        label=second_paper["title"][:40] + "..." if len(second_paper["title"]) > 40 else second_paper["title"],
+                        type="paper",
+                        size=12.0,
+                        color="#8B5CF6",  # 紫色
+                        metadata={
+                            "title": second_paper["title"],
+                            "authors": second_paper["author_names"],
+                            "year": second_paper["year"],
+                            "journal": second_paper["journal"],
+                            "abstract": second_paper["abstract"],
+                            "citation_count": second_paper["citation_count"]
+                        }
+                    )
+                    nodes.append(node)
+                    processed_papers.add(second_id)
+                    
+                    # 添加边
+                    edge = GraphEdge(
+                        source=second_id,
+                        target=cite_id,
+                        type="citation",
+                        weight=0.8,
+                        metadata={"relationship": "cites", "level": 2}
+                    )
+                    edges.append(edge)
+    
+    return GraphData(
+        nodes=nodes,
+        edges=edges,
+        center_node=paper_id,
+        layout="force"
+    )

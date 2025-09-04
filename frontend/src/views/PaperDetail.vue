@@ -110,6 +110,15 @@
           <p v-else class="text-gray-500 dark:text-gray-400">暂无被引文献</p>
         </div>
       </div>
+
+      <!-- 引用关系图谱 -->
+      <div class="card p-6 mt-8 animate-slide-in">
+        <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">引用关系图谱</h3>
+        <p class="text-gray-600 dark:text-gray-400 text-sm mb-4">
+          可视化展示该论文的引用关系网络，包括参考文献、被引文献以及二级引用关系
+        </p>
+        <CitationGraph :paper-id="paper.id" />
+      </div>
     </div>
 
     <!-- 加载状态 -->
@@ -127,6 +136,7 @@ import { ref, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { api } from '@/services/api'
 import { useUserStore } from '@/stores/user'
+import CitationGraph from '@/components/CitationGraph.vue'
 
 const route = useRoute()
 const userStore = useUserStore()
