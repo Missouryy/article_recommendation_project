@@ -79,6 +79,7 @@ export const api = {
     unbookmark: (id: string) => apiClient.delete('/papers/bookmark', { params: { paper_id: id } }),
     compare: (id1: string, id2: string) => apiClient.post('/papers/compare', { paper_id1: id1, paper_id2: id2 }),
     citationNetwork: (id: string) => apiClient.get('/papers/citation-network', { params: { paper_id: id } }),
+    citationGraph: (id: string, params?: any) => apiClient.get('/papers/citation-graph', { params: { paper_id: id, ...params } }),
   },
 
   // 作者相关
