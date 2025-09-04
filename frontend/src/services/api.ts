@@ -126,6 +126,20 @@ export const api = {
     ideas: (paperId: string) => apiClient.post(`/ai-assistant/generate-research-ideas/${paperId}`),
     capabilities: () => apiClient.get('/ai-assistant/capabilities'),
   },
+
+  // 智能推荐相关
+  recommendations: {
+    getPersonalized: (params?: any) => apiClient.get('/recommendations/', { params }),
+    getDaily: (params?: any) => apiClient.get('/recommendations/daily', { params }),
+    getPreference: (params?: any) => apiClient.get('/recommendations/preference', { params }),
+    getPopular: (params?: any) => apiClient.get('/recommendations/popular', { params }),
+    getTrendingTopics: (params?: any) => apiClient.get('/recommendations/trending-topics', { params }),
+    getStats: () => apiClient.get('/recommendations/stats'),
+    getSimilar: (paperId: string, params?: any) => apiClient.get(`/recommendations/similar/${paperId}`, { params }),
+    provideFeedback: (paperId: string, feedbackType: string) => 
+      apiClient.post('/recommendations/feedback', null, { params: { paper_id: paperId, feedback_type: feedbackType } }),
+    refresh: () => apiClient.post('/recommendations/refresh'),
+  },
 }
 
 export default apiClient

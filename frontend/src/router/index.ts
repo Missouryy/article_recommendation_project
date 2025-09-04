@@ -12,6 +12,7 @@ const Authors = () => import('../views/Authors.vue')
 const AuthorDetail = () => import('../views/AuthorDetail.vue')
 const Workspace = () => import('../views/Workspace.vue')
 const Profile = () => import('../views/Profile.vue')
+const SmartRecommendations = () => import('../views/SmartRecommendations.vue')
 
 const router = createRouter({
   history: createWebHistory(),
@@ -75,6 +76,12 @@ const router = createRouter({
       name: 'Profile',
       component: Profile,
       meta: { title: '个人资料', requiresAuth: true }
+    },
+    {
+      path: '/recommendations',
+      name: 'SmartRecommendations',
+      component: SmartRecommendations,
+      meta: { title: '智能推荐' }
     },
     {
       path: '/:pathMatch(.*)*',

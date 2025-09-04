@@ -1,0 +1,6 @@
+{
+  "database_path": "F:\\article_recommendation_project\\data\\openalex_v3.db",
+  "id_map_path": "F:\\article_recommendation_project\\data\\id_map_v3.json",
+  "index_path": "F:\\article_recommendation_project\\data\\papers_v3.index",
+  "description": "默认配置示例 - OpenAlex V3"
+}

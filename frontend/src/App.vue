@@ -17,6 +17,7 @@
                 <router-link to="/search" class="nav-link">智能搜索</router-link>
                 <router-link to="/papers" class="nav-link">论文库</router-link>
                 <router-link to="/authors" class="nav-link">学者</router-link>
+                <router-link to="/recommendations" class="nav-link">智能推荐</router-link>
                 <router-link to="/workspace" class="nav-link">工作台</router-link>
               </div>
             </div>

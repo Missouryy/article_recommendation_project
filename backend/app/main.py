@@ -8,7 +8,7 @@ from fastapi.responses import JSONResponse
 import uvicorn
 
 # 导入API路由
-from .api import auth, search, papers, authors, workspace, ai_assistant
+from .api import auth, search, papers, authors, workspace, ai_assistant, recommendations
 
 # 创建FastAPI应用实例
 app = FastAPI(
@@ -70,6 +70,7 @@ app.include_router(papers.router, prefix="/api")
 app.include_router(authors.router, prefix="/api")
 app.include_router(workspace.router, prefix="/api")
 app.include_router(ai_assistant.router, prefix="/api")
+app.include_router(recommendations.router, prefix="/api")
 
 # 根路径
 @app.get("/", tags=["系统"])
@@ -88,7 +89,8 @@ async def root():
             "论文分析工具",
             "作者画像分析",
             "个人工作台",
-            "AI学术助手"
+            "AI学术助手",
+            "智能推荐系统"
         ]
     }
 
@@ -210,6 +212,11 @@ async def api_info():
                 "/api/ai-assistant/summarize/{paper_id}",
                 "/api/ai-assistant/compare",
                 "/api/ai-assistant/research-trends"
+            ],
+            "recommendations": [
+                "/api/recommendations/",
+                "/api/recommendations/popular",
+                "/api/recommendations/trending-topics"
             ]
         }
     }
