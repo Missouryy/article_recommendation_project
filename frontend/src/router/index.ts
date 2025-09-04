@@ -14,6 +14,7 @@ const Workspace = () => import('../views/Workspace.vue')
 const Profile = () => import('../views/Profile.vue')
 const SmartRecommendations = () => import('../views/SmartRecommendations.vue')
 
+
 const router = createRouter({
   history: createWebHistory(),
   routes: [
@@ -90,6 +91,7 @@ const router = createRouter({
       meta: { title: '页面未找到' }
     }
   ],
+
   scrollBehavior(to, from, savedPosition) {
     if (savedPosition) {
       return savedPosition
@@ -100,7 +102,9 @@ const router = createRouter({
 })
 
 // 路由守卫
+
 router.beforeEach(async (to, from, next) => {
+
   const userStore = useUserStore()
   
   // 设置页面标题

@@ -36,7 +36,7 @@
             
             <div class="mt-3 flex flex-wrap justify-center gap-1">
               <span
-                v-for="area in author.research_areas.slice(0, 3)"
+                v-for="area in (author.research_areas ? author.research_areas.slice(0, 3) : [])"
                 :key="area"
                 class="badge-secondary text-xs"
               >
@@ -58,9 +58,10 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
+import type { Author } from '@/types'
 import { api } from '@/services/api'
 
-const authors = ref([])
+const authors = ref<Author[]>([])
 const loading = ref(false)
 
 const getInitials = (name: string) => {

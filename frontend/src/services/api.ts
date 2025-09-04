@@ -1,8 +1,10 @@
-import axios, { AxiosInstance, AxiosRequestConfig, AxiosResponse } from 'axios'
-import { useUserStore } from '@/stores/user'
 
+import axios, { AxiosInstance, AxiosRequestConfig, AxiosResponse } from 'axios'
+import type { InternalAxiosRequestConfig } from 'axios'
+import { useUserStore } from '@/stores/user'
 // API基础配置
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000/api'
+const API_BASE_URL = (import.meta as any).env?.VITE_API_BASE_URL || 'http://127.0.0.1:8000/api'
+
 
 // 创建axios实例
 const apiClient: AxiosInstance = axios.create({
@@ -15,11 +17,15 @@ const apiClient: AxiosInstance = axios.create({
 
 // 请求拦截器
 apiClient.interceptors.request.use(
-  (config: AxiosRequestConfig) => {
+
+  (config: InternalAxiosRequestConfig) => {
     const userStore = useUserStore()
     const token = userStore.token
     
-    if (token && config.headers) {
+    if (token) {
+      // headers 可能是未定义或多种类型，使用安全写法
+      config.headers = config.headers || {}
+      // @ts-ignore - assign Authorization header
       config.headers.Authorization = `Bearer ${token}`
     }
     

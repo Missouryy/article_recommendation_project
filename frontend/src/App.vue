@@ -2,13 +2,14 @@
   <div id="app" :class="{ 'dark': isDark }">
     <div class="min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors duration-300">
       <!-- 导航栏 -->
+
       <nav class="bg-white/80 dark:bg-gray-800/80 backdrop-blur-md shadow-soft border-b border-gray-200/60 dark:border-gray-700/60 animate-fade-in">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div class="flex justify-between h-16">
             <div class="flex items-center">
               <!-- Logo -->
-              <router-link to="/" class="flex-shrink-0 flex items-center group">
-                <div class="h-8 w-8 bg-gradient-to-r from-primary-600 to-accent-600 rounded-lg mr-3 transition-transform group-hover:scale-105"></div>
+              <router-link to="/" class="flex-shrink-0 flex items-center">
+                <img src="@/assets/logo.png" alt="Logo" class="h-8 w-8 rounded-lg mr-3 shadow-md" />
                 <span class="font-bold text-xl text-gray-900 dark:text-white">学术推荐</span>
               </router-link>
               
@@ -19,6 +20,7 @@
                 <router-link to="/authors" class="nav-link">学者</router-link>
                 <router-link to="/recommendations" class="nav-link">智能推荐</router-link>
                 <router-link to="/workspace" class="nav-link">工作台</router-link>
+
               </div>
             </div>
             
@@ -43,6 +45,7 @@
                   class="flex items-center text-sm rounded-full focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
                 >
                   <!-- 修复：使用CSS生成的头像，不依赖图片文件 -->
+
                   <div class="h-8 w-8 rounded-full bg-gradient-to-r from-primary-600 to-accent-600 text-white flex items-center justify-center text-sm font-medium shadow-soft">
                     {{ userStore.userInitials || 'U' }}
                   </div>

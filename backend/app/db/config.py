@@ -17,6 +17,7 @@ class DatabaseConfig:
     
     def _load_config(self):
         """加载数据库配置"""
+
         # 默认配置
         default_config = {
             "database_path": str(self.project_root / "openalex_v3.db"),
@@ -24,6 +25,8 @@ class DatabaseConfig:
             "index_path": str(self.project_root / "papers_v3.index"),
             "description": "默认配置 - OpenAlex V3"
         }
+
+
         
         # 检查配置文件
         config_file = self.project_root / ".database_config"
@@ -152,6 +155,7 @@ class DatabaseConfig:
             validation_result["warnings"].append(f"FAISS索引文件不存在: {index_path} (智能推荐功能将不可用)")
         
         return validation_result
+
 
 # 全局配置实例
 db_config = DatabaseConfig()

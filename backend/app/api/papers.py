@@ -265,7 +265,6 @@ async def get_citation_network(paper_id: str = Query(..., description="论文ID"
         citation_depth=2,
         influence_score=influence_score
     )
-
 @router.get("/citation-graph", response_model=GraphData, summary="获取引用关系图谱")
 async def get_citation_graph(
     paper_id: str = Query(..., description="论文ID"),
@@ -435,3 +434,4 @@ async def get_citation_graph(
         center_node=paper_id,
         layout="force"
     )
+

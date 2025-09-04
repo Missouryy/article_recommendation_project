@@ -108,6 +108,8 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
+
+import type { Paper, Author } from '@/types'
 import { api } from '@/services/api'
 
 const stats = ref({
@@ -116,9 +118,10 @@ const stats = ref({
   followed_authors_count: 0,
   reading_history_count: 0
 })
-const recommendations = ref([])
-const recentBookmarks = ref([])
-const followedAuthors = ref([])
+
+const recommendations = ref<{ paper: Paper; reason: string }[]>([])
+const recentBookmarks = ref<Paper[]>([])
+const followedAuthors = ref<Author[]>([])
 
 const getInitials = (name: string) => {
   return name

@@ -8,45 +8,11 @@ from ..models.paper import SearchRequest, SearchResponse, PaperSummary, SearchFi
 from ..models.user import User
 from ..api.auth import get_current_user, get_current_user_optional
 from ..db.database import db, user_manager
-# 移除旧的推荐系统引用，现在使用简化的重排序逻辑
+
+from ..algorithms.recommender import rerank_search_results
 
 router = APIRouter(prefix="/search", tags=["搜索"])
 
-async def _simple_rerank_search_results(user_id: str, results: List[Dict[str, Any]], 
-                                      user_data: Dict[str, Any]) -> List[Dict[str, Any]]:
-    """
-    简化版搜索结果重排序
-    基于用户兴趣调整搜索结果排序
-    """
-    try:
-        user_interests = user_data.get("research_interests", [])
-        
-        # 为每个结果计算个性化分数
-        for result in results:
-            personalization_score = 0.0
-            
-            # 基于研究兴趣调整
-            paper_field = result.get("research_field", "")
-            paper_title = result.get("title", "").lower()
-            
-            for interest in user_interests:
-                if interest.lower() in paper_field.lower():
-                    personalization_score += 0.3
-                if interest.lower() in paper_title:
-                    personalization_score += 0.2
-            
-            # 调整原始分数
-            original_score = result.get("relevance_score", 0.5)
-            result["relevance_score"] = min(1.0, original_score + personalization_score * 0.1)
-        
-        # 重新排序
-        results.sort(key=lambda x: x.get("relevance_score", 0), reverse=True)
-        
-    except Exception as e:
-        # 如果重排序失败，返回原始结果
-        pass
-    
-    return results
 
 @router.post("/", response_model=SearchResponse, summary="论文搜索")
 async def search_papers(search_request: SearchRequest, current_user: Optional[User] = Depends(get_current_user_optional)):
@@ -80,11 +46,12 @@ async def search_papers(search_request: SearchRequest, current_user: Optional[Us
         sort_order=search_request.sort_order
     )
     
-    # 如果用户已登录，应用个性化重排序（简化版）
+
+    # 如果用户已登录，应用个性化重排序
     if current_user:
         user_data = await user_manager.get_user_by_id(current_user.id)
         if user_data:
-            sorted_results = await _simple_rerank_search_results(
+            sorted_results = rerank_search_results(
                 user_id=current_user.id,
                 results=sorted_results,
                 user_data=user_data

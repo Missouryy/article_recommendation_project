@@ -10,6 +10,7 @@ import uvicorn
 # 导入API路由
 from .api import auth, search, papers, authors, workspace, ai_assistant, recommendations
 
+
 # 创建FastAPI应用实例
 app = FastAPI(
     title="学术论文推荐系统API",
@@ -72,6 +73,7 @@ app.include_router(workspace.router, prefix="/api")
 app.include_router(ai_assistant.router, prefix="/api")
 app.include_router(recommendations.router, prefix="/api")
 
+
 # 根路径
 @app.get("/", tags=["系统"])
 async def root():
@@ -91,6 +93,7 @@ async def root():
             "个人工作台",
             "AI学术助手",
             "智能推荐系统"
+
         ]
     }
 
