@@ -1,8 +1,10 @@
-import axios, { AxiosInstance, AxiosRequestConfig, AxiosResponse } from 'axios'
-import { useUserStore } from '@/stores/user'
 
+import axios, { AxiosInstance, AxiosRequestConfig, AxiosResponse } from 'axios'
+import type { InternalAxiosRequestConfig } from 'axios'
+import { useUserStore } from '@/stores/user'
 // API基础配置
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000/api'
+const API_BASE_URL = (import.meta as any).env?.VITE_API_BASE_URL || 'http://127.0.0.1:8000/api'
+
 
 // 创建axios实例
 const apiClient: AxiosInstance = axios.create({
@@ -15,11 +17,15 @@ const apiClient: AxiosInstance = axios.create({
 
 // 请求拦截器
 apiClient.interceptors.request.use(
-  (config: AxiosRequestConfig) => {
+
+  (config: InternalAxiosRequestConfig) => {
     const userStore = useUserStore()
     const token = userStore.token
     
-    if (token && config.headers) {
+    if (token) {
+      // headers 可能是未定义或多种类型，使用安全写法
+      config.headers = config.headers || {}
+      // @ts-ignore - assign Authorization header
       config.headers.Authorization = `Bearer ${token}`
     }
     
@@ -79,6 +85,7 @@ export const api = {
     unbookmark: (id: string) => apiClient.delete('/papers/bookmark', { params: { paper_id: id } }),
     compare: (id1: string, id2: string) => apiClient.post('/papers/compare', { paper_id1: id1, paper_id2: id2 }),
     citationNetwork: (id: string) => apiClient.get('/papers/citation-network', { params: { paper_id: id } }),
+    citationGraph: (id: string, params?: any) => apiClient.get('/papers/citation-graph', { params: { paper_id: id, ...params } }),
   },
 
   // 作者相关
@@ -125,6 +132,20 @@ export const api = {
       apiClient.post(`/ai-assistant/recommend-readings/${paperId}`, { limit }),
     ideas: (paperId: string) => apiClient.post(`/ai-assistant/generate-research-ideas/${paperId}`),
     capabilities: () => apiClient.get('/ai-assistant/capabilities'),
+  },
+
+  // 智能推荐相关
+  recommendations: {
+    getPersonalized: (params?: any) => apiClient.get('/recommendations/', { params }),
+    getDaily: (params?: any) => apiClient.get('/recommendations/daily', { params }),
+    getPreference: (params?: any) => apiClient.get('/recommendations/preference', { params }),
+    getPopular: (params?: any) => apiClient.get('/recommendations/popular', { params }),
+    getTrendingTopics: (params?: any) => apiClient.get('/recommendations/trending-topics', { params }),
+    getStats: () => apiClient.get('/recommendations/stats'),
+    getSimilar: (paperId: string, params?: any) => apiClient.get(`/recommendations/similar/${paperId}`, { params }),
+    provideFeedback: (paperId: string, feedbackType: string) => 
+      apiClient.post('/recommendations/feedback', null, { params: { paper_id: paperId, feedback_type: feedbackType } }),
+    refresh: () => apiClient.post('/recommendations/refresh'),
   },
 }
 

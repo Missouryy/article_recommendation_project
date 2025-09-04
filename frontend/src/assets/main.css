@@ -1,3 +1,14 @@
+
+  .btn-lg {
+    font-size: 1.25rem;
+    padding: 0.9em 2.2em;
+    min-height: 3.2em;
+    border-radius: 2em;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    box-shadow: 0 6px 24px 0 rgba(60,60,120,0.12);
+  }
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -8,11 +19,21 @@
   }
   
   body {
-    @apply font-sans antialiased bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100;
+
+    font-family: -apple-system, BlinkMacSystemFont, "San Francisco", "Helvetica Neue", Arial, sans-serif;
+  @apply font-sans antialiased bg-white dark:bg-gray-900;
+    font-size: 18px;
+    letter-spacing: 0.01em;
+    line-height: 1.7;
+    color: #222;
+    min-height: 100vh;
+    padding-bottom: 32px;
+
   }
 }
 
 @layer components {
+
   :root {
     --color-bg: 248 250 252; /* gray-50 */
     --color-surface: 255 255 255; /* white */
@@ -44,6 +65,7 @@
   
   .btn-secondary {
     @apply btn bg-gray-200/80 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-900 dark:text-white;
+
   }
   
   .btn-danger {
@@ -51,7 +73,8 @@
   }
   
   .input {
-    @apply w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white/90 dark:bg-gray-700/90 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-accent-500 focus:border-transparent focus:shadow-[0_0_0_4px_rgba(6,182,212,0.15)];
+    @apply w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-xl bg-white/80 dark:bg-gray-700/80 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent shadow-sm backdrop-blur;
+    font-family: inherit;
   }
   
   .label {
@@ -59,11 +82,12 @@
   }
   
   .badge {
-    @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium;
+    @apply inline-flex items-center px-3 py-1 rounded-full text-xs font-medium shadow-sm backdrop-blur;
+    font-family: inherit;
   }
   
   .badge-primary {
-    @apply badge bg-cyan-100 text-cyan-800 dark:bg-cyan-900 dark:text-cyan-200;
+    @apply badge bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200;
   }
   
   .badge-secondary {
@@ -75,31 +99,38 @@
   }
   
   .spinner {
-    @apply animate-spin h-5 w-5 border-2 border-gray-300 border-t-primary-600 rounded-full;
+    @apply animate-spin h-5 w-5 border-2 border-gray-300 border-t-blue-600 rounded-full backdrop-blur;
   }
 }
 
 /* 自定义滚动条 */
 ::-webkit-scrollbar {
-  @apply w-2;
+
+  width: 8px;
+  background: rgba(220,220,230,0.2);
+  border-radius: 8px;
 }
 
 ::-webkit-scrollbar-track {
-  @apply bg-gray-100 dark:bg-gray-800;
+  background: rgba(240,240,255,0.5);
+  border-radius: 8px;
 }
 
 ::-webkit-scrollbar-thumb {
-  @apply bg-gray-400 dark:bg-gray-600 rounded-full;
+  background: linear-gradient(90deg, #e0e7ff 0%, #c7d2fe 100%);
+  border-radius: 8px;
+  border: 2px solid rgba(255,255,255,0.5);
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  @apply bg-gray-500 dark:bg-gray-500;
+  background: linear-gradient(90deg, #a5b4fc 0%, #818cf8 100%);
+
 }
 
 /* 动画效果 */
 .fade-enter-active,
 .fade-leave-active {
-  transition: opacity 0.3s ease;
+  transition: opacity 0.4s cubic-bezier(.4,0,.2,1);
 }
 
 .fade-enter-from,
@@ -109,35 +140,36 @@
 
 .slide-up-enter-active,
 .slide-up-leave-active {
-  transition: all 0.3s ease;
+  transition: all 0.4s cubic-bezier(.4,0,.2,1);
 }
 
 .slide-up-enter-from {
-  transform: translateY(20px);
+  transform: scale(0.98) translateY(20px);
   opacity: 0;
 }
 
 .slide-up-leave-to {
-  transform: translateY(-20px);
+  transform: scale(0.98) translateY(-20px);
   opacity: 0;
 }
 
 /* 图表样式 */
 .chart-container {
-  @apply relative w-full h-64 p-4;
+  @apply relative w-full h-64 p-6 rounded-2xl shadow-lg backdrop-blur-lg;
 }
 
 /* 知识图谱样式 */
 .graph-container {
-  @apply relative w-full bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700;
+
+  @apply relative w-full bg-white/80 dark:bg-gray-800/80 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-lg backdrop-blur-lg;
 }
 
 .graph-node {
-  @apply cursor-pointer;
+  @apply cursor-pointer transition-transform duration-200;
 }
 
 .graph-node:hover {
-  @apply opacity-80;
+  @apply opacity-80 scale-105;
 }
 
 /* 响应式工具类 */
@@ -149,6 +181,6 @@
 
 /* 暗色模式平滑过渡 */
 * {
-  transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease, transform 0.2s ease;
+  transition: background-color 0.4s cubic-bezier(.4,0,.2,1), color 0.4s cubic-bezier(.4,0,.2,1), border-color 0.4s cubic-bezier(.4,0,.2,1), box-shadow 0.4s cubic-bezier(.4,0,.2,1);
 }
 

@@ -1,138 +1,161 @@
 """
 数据库配置文件
-允许用户选择不同的数据库文件
+支持直接指定数据库、ID映射和索引文件的完整路径
 """
 import os
+import json
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Dict, Any
 
 class DatabaseConfig:
-    """数据库配置管理类"""
-    
-    # 可用的数据库文件
-    AVAILABLE_DATABASES = {
-        "openalex_v1": {
-            "path": "openalex_v1.db",
-            "description": "OpenAlex V1 数据库 (1.2GB) - 包含用户表",
-            "has_user_tables": True
-        },
-        "openalex_v3": {
-            "path": "openalex_v3.db", 
-            "description": "OpenAlex V3 数据库 (12GB) - 爬虫生成，需要自动初始化",
-            "has_user_tables": False
-        }
-    }
+    """数据库配置管理类 - 支持直接路径配置"""
     
     def __init__(self):
         self.project_root = Path(__file__).parent.parent.parent.parent
-        self._current_db = None
+        self._config = None
         self._load_config()
     
     def _load_config(self):
         """加载数据库配置"""
-        # 检查环境变量
-        env_db = os.getenv("DATABASE_FILE")
-        if env_db:
-            self._current_db = env_db
-            return
+
+        # 默认配置
+        default_config = {
+            "database_path": str(self.project_root / "openalex_v3.db"),
+            "id_map_path": str(self.project_root / "id_map_v3.json"),
+            "index_path": str(self.project_root / "papers_v3.index"),
+            "description": "默认配置 - OpenAlex V3"
+        }
+
+
         
         # 检查配置文件
         config_file = self.project_root / ".database_config"
         if config_file.exists():
             try:
                 with open(config_file, 'r', encoding='utf-8') as f:
-                    self._current_db = f.read().strip()
-            except Exception:
-                pass
+                    content = f.read().strip()
+                    
+                # 尝试解析为JSON
+                try:
+                    self._config = json.loads(content)
+                    # 验证必要字段
+                    required_fields = ["database_path", "id_map_path", "index_path"]
+                    for field in required_fields:
+                        if field not in self._config:
+                            raise ValueError(f"配置文件缺少必要字段: {field}")
+                    return
+                except json.JSONDecodeError:
+                    # 如果不是JSON，尝试作为旧格式处理（单行数据库名称）
+                    if content in ["openalex_v1", "openalex_v3"]:
+                        self._config = self._get_legacy_config(content)
+                        return
+                    else:
+                        print(f"警告: 配置文件格式错误，使用默认配置")
+                        
+            except Exception as e:
+                print(f"警告: 读取配置文件失败 ({e})，使用默认配置")
         
-        # 默认使用 openalex_v3
-        if not self._current_db:
-            self._current_db = "openalex_v3"
+        # 使用默认配置
+        self._config = default_config
     
-    def get_current_database(self) -> str:
-        """获取当前选择的数据库名称"""
-        return self._current_db
+    def _get_legacy_config(self, db_name: str) -> Dict[str, Any]:
+        """处理旧版配置格式的兼容性"""
+        legacy_configs = {
+            "openalex_v1": {
+                "database_path": str(self.project_root / "openalex_v1.db"),
+                "id_map_path": str(self.project_root / "id_map_v1.json"),
+                "index_path": str(self.project_root / "papers_v1.index"),
+                "description": "兼容模式 - OpenAlex V1"
+            },
+            "openalex_v3": {
+                "database_path": str(self.project_root / "openalex_v3.db"),
+                "id_map_path": str(self.project_root / "id_map_v3.json"),
+                "index_path": str(self.project_root / "papers_v3.index"),
+                "description": "兼容模式 - OpenAlex V3"
+            }
+        }
+        return legacy_configs.get(db_name, legacy_configs["openalex_v3"])
     
-    def get_database_path(self, db_name: Optional[str] = None) -> Path:
+    def get_database_path(self) -> Path:
         """获取数据库文件路径"""
-        if db_name is None:
-            db_name = self._current_db
-        
-        if db_name not in self.AVAILABLE_DATABASES:
-            raise ValueError(f"未知的数据库: {db_name}")
-        
-        db_path = self.project_root / self.AVAILABLE_DATABASES[db_name]["path"]
-        return db_path
+        return Path(self._config["database_path"])
     
-    def get_database_info(self, db_name: Optional[str] = None) -> dict:
-        """获取数据库信息"""
-        if db_name is None:
-            db_name = self._current_db
-        
-        if db_name not in self.AVAILABLE_DATABASES:
-            return {"error": f"未知的数据库: {db_name}"}
-        
-        info = self.AVAILABLE_DATABASES[db_name].copy()
-        db_path = self.get_database_path(db_name)
+    def get_id_map_path(self) -> Path:
+        """获取ID映射文件路径"""
+        return Path(self._config["id_map_path"])
+    
+    def get_index_path(self) -> Path:
+        """获取FAISS索引文件路径"""
+        return Path(self._config["index_path"])
+    
+    def get_config_info(self) -> Dict[str, Any]:
+        """获取当前配置信息"""
+        info = self._config.copy()
         
         # 检查文件是否存在
-        if db_path.exists():
-            info["exists"] = True
-            info["file_size_mb"] = round(db_path.stat().st_size / (1024 * 1024), 2)
-        else:
-            info["exists"] = False
-            info["file_size_mb"] = 0
+        db_path = self.get_database_path()
+        id_map_path = self.get_id_map_path()
+        index_path = self.get_index_path()
         
-        info["full_path"] = str(db_path)
+        info["database_exists"] = db_path.exists()
+        info["id_map_exists"] = id_map_path.exists()
+        info["index_exists"] = index_path.exists()
+        
+        if db_path.exists():
+            info["database_size_mb"] = round(db_path.stat().st_size / (1024 * 1024), 2)
+        else:
+            info["database_size_mb"] = 0
+            
         return info
     
-    def switch_database(self, db_name: str) -> bool:
-        """切换数据库"""
-        if db_name not in self.AVAILABLE_DATABASES:
-            return False
+    def update_config(self, database_path: str, id_map_path: str, index_path: str, description: str = "") -> bool:
+        """更新配置并保存到文件"""
+        new_config = {
+            "database_path": database_path,
+            "id_map_path": id_map_path,
+            "index_path": index_path,
+            "description": description or "用户自定义配置"
+        }
         
-        # 检查数据库文件是否存在
-        db_path = self.get_database_path(db_name)
-        if not db_path.exists():
-            return False
-        
-        # 更新配置
-        self._current_db = db_name
-        
-        # 保存到配置文件
-        config_file = self.project_root / ".database_config"
         try:
+            # 保存到配置文件
+            config_file = self.project_root / ".database_config"
             with open(config_file, 'w', encoding='utf-8') as f:
-                f.write(db_name)
+                json.dump(new_config, f, indent=2, ensure_ascii=False)
+            
+            # 更新内存中的配置
+            self._config = new_config
             return True
-        except Exception:
+        except Exception as e:
+            print(f"保存配置失败: {e}")
             return False
     
-    def list_available_databases(self) -> dict:
-        """列出所有可用的数据库"""
-        result = {}
-        for db_name, info in self.AVAILABLE_DATABASES.items():
-            result[db_name] = self.get_database_info(db_name)
-            result[db_name]["is_current"] = (db_name == self._current_db)
+    def validate_config(self) -> Dict[str, Any]:
+        """验证当前配置的有效性"""
+        validation_result = {
+            "valid": True,
+            "errors": [],
+            "warnings": []
+        }
         
-        return result
-    
-    def get_recommended_database(self) -> str:
-        """获取推荐的数据库"""
-        # 优先选择有用户表的数据库
-        for db_name, info in self.AVAILABLE_DATABASES.items():
-            if info["has_user_tables"]:
-                db_path = self.get_database_path(db_name)
-                if db_path.exists():
-                    return db_name
+        # 检查数据库文件
+        db_path = self.get_database_path()
+        if not db_path.exists():
+            validation_result["valid"] = False
+            validation_result["errors"].append(f"数据库文件不存在: {db_path}")
         
-        # 如果没有有用户表的数据库，选择第一个存在的
-        for db_name, info in self.AVAILABLE_DATABASES.items():
-            db_path = self.get_database_path(db_name)
-            if db_path.exists():
-                return db_name
+        # 检查ID映射文件
+        id_map_path = self.get_id_map_path()
+        if not id_map_path.exists():
+            validation_result["warnings"].append(f"ID映射文件不存在: {id_map_path} (智能推荐功能将不可用)")
         
-        return "openalex_v3"  # 默认
+        # 检查索引文件
+        index_path = self.get_index_path()
+        if not index_path.exists():
+            validation_result["warnings"].append(f"FAISS索引文件不存在: {index_path} (智能推荐功能将不可用)")
+        
+        return validation_result
+
 
 # 全局配置实例
 db_config = DatabaseConfig()

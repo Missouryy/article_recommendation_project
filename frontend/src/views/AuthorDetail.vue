@@ -6,30 +6,30 @@
         <div class="flex items-start space-x-6">
           <div class="w-24 h-24 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full flex items-center justify-center">
             <span class="text-white font-bold text-2xl">
-              {{ getInitials(author.name) }}
+              {{ getInitials(author?.name || '') }}
             </span>
           </div>
           
           <div class="flex-1">
             <h1 class="text-3xl font-bold text-gray-900 dark:text-white mb-2">
-              {{ author.name }}
+              {{ author?.name }}
             </h1>
             
             <p class="text-lg text-gray-600 dark:text-gray-400 mb-4">
-              {{ author.affiliation }}
+              {{ author?.affiliation }}
             </p>
             
             <div class="grid grid-cols-3 gap-6 mb-6">
               <div class="text-center">
-                <div class="text-2xl font-bold text-blue-600 dark:text-blue-400">{{ author.h_index }}</div>
+                <div class="text-2xl font-bold text-blue-600 dark:text-blue-400">{{ author?.h_index }}</div>
                 <div class="text-sm text-gray-500">H指数</div>
               </div>
               <div class="text-center">
-                <div class="text-2xl font-bold text-blue-600 dark:text-blue-400">{{ author.citation_count }}</div>
+                <div class="text-2xl font-bold text-blue-600 dark:text-blue-400">{{ author?.citation_count }}</div>
                 <div class="text-sm text-gray-500">引用数</div>
               </div>
               <div class="text-center">
-                <div class="text-2xl font-bold text-blue-600 dark:text-blue-400">{{ author.paper_count }}</div>
+                <div class="text-2xl font-bold text-blue-600 dark:text-blue-400">{{ author?.paper_count }}</div>
                 <div class="text-sm text-gray-500">论文数</div>
               </div>
             </div>
@@ -38,7 +38,7 @@
               <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-3">研究领域</h3>
               <div class="flex flex-wrap gap-2">
                 <span
-                  v-for="area in author.research_areas"
+                  v-for="area in (author?.research_areas || [])"
                   :key="area"
                   class="badge-primary"
                 >
@@ -47,9 +47,9 @@
               </div>
             </div>
             
-            <div v-if="author.bio" class="mb-6">
+              <div v-if="author?.bio" class="mb-6">
               <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-3">简介</h3>
-              <p class="text-gray-700 dark:text-gray-300">{{ author.bio }}</p>
+                <p class="text-gray-700 dark:text-gray-300">{{ author?.bio }}</p>
             </div>
             
             <!-- 操作按钮 -->
@@ -105,11 +105,14 @@ import { useRoute } from 'vue-router'
 import { api } from '@/services/api'
 import { useUserStore } from '@/stores/user'
 
+import type { Author, Paper } from '@/types'
+
+
 const route = useRoute()
 const userStore = useUserStore()
 
-const author = ref(null)
-const papers = ref([])
+const author = ref<Author | null>(null)
+const papers = ref<Paper[]>([])
 const loading = ref(false)
 const isFollowing = ref(false)
 
@@ -126,14 +129,28 @@ const fetchAuthor = async () => {
   try {
     loading.value = true
     const authorId = route.params.id as string
-    
     const [authorRes, papersRes] = await Promise.all([
       api.authors.get(authorId),
       api.authors.papers(authorId, { limit: 10, sort_by: 'citation', order: 'desc' })
     ])
-    
+
     author.value = authorRes.data
     papers.value = papersRes.data
+
+    // 新增：判断当前用户是否已关注该学者
+    if (userStore.isAuthenticated) {
+      try {
+        const followedRes = await api.workspace.followedAuthors()
+        const followedList = followedRes.data as Author[]
+        isFollowing.value = followedList.some(a => a.id === authorId)
+      } catch (e) {
+        // 忽略关注列表获取失败
+        isFollowing.value = false
+      }
+    } else {
+      isFollowing.value = false
+    }
+
   } catch (error) {
     console.error('获取学者信息失败:', error)
   } finally {

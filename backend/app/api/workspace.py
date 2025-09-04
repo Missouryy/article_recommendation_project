@@ -7,6 +7,7 @@ from ..models.user import User, Folder, FolderCreate, UserStats, Recommendation
 from ..models.paper import PaperSummary, AuthorSummary
 from ..api.auth import get_current_user
 from ..db.database import db, user_manager
+
 from ..algorithms.recommender import get_daily_recommendations
 
 router = APIRouter(prefix="/workspace", tags=["个人工作台"])
@@ -77,12 +78,16 @@ async def get_workspace_dashboard(current_user: User = Depends(get_current_user)
             followed_authors_info.append(summary)
     
     # 获取推荐列表
-    recommendations = get_daily_recommendations(
-        user_id=current_user.id,
-        user_data=user_data,
-        papers=await db.get_papers(limit=1000),  # 获取更多论文用于推荐
-        limit=5
-    )
+    try:
+        from .recommendations import recommender
+        recommendations = await recommender.get_daily_recommendations(
+            user_id=current_user.id,
+            limit=5
+        )
+    except Exception as e:
+        # 如果推荐失败，返回空列表
+        recommendations = []
+
     
     return {
         "user_stats": stats,
@@ -427,12 +432,17 @@ async def get_personalized_recommendations(
     - **limit**: 推荐论文数量
     """
     # 获取推荐列表
-    recommendations = get_daily_recommendations(
-        user_id=current_user.id,
-        user_data={},  # 暂时使用空字典，后续可以扩展
-        papers=await db.get_papers(limit=1000),  # 获取更多论文用于推荐
-        limit=limit
-    )
+
+    try:
+        from .recommendations import recommender
+        recommendations = await recommender.get_daily_recommendations(
+            user_id=current_user.id,
+            limit=limit
+        )
+    except Exception as e:
+        # 如果推荐失败，返回空列表
+        recommendations = []
+
     
     # 获取推荐论文的详细信息
     recommended_papers = []
@@ -452,9 +462,10 @@ async def get_personalized_recommendations(
             )
             recommended_papers.append({
                 "paper": paper_summary,
-                "recommendation_score": rec["score"],
-                "reason": rec["reason"],
-                "type": rec["type"]
+                "recommendation_score": rec.get("relevance_score", 0.5),
+                "reason": rec.get("recommendation_reason", "智能推荐"),
+                "type": "intelligent"
+
             })
     
     return {
