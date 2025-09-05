@@ -10,25 +10,29 @@
       <div class="grid grid-cols-2 md:grid-cols-4 gap-6 mb-8">
         <div class="card p-6 text-center">
           <div class="text-2xl font-bold text-blue-600 dark:text-blue-400 mb-2">
-            {{ stats.total_bookmarks }}
+            <span v-if="!loading">{{ stats.total_bookmarks }}</span>
+            <div v-else class="animate-pulse bg-gray-300 dark:bg-gray-600 h-8 w-8 mx-auto rounded"></div>
           </div>
           <div class="text-sm text-gray-500">收藏论文</div>
         </div>
         <div class="card p-6 text-center">
           <div class="text-2xl font-bold text-green-600 dark:text-green-400 mb-2">
-            {{ stats.total_folders }}
+            <span v-if="!loading">{{ stats.total_folders }}</span>
+            <div v-else class="animate-pulse bg-gray-300 dark:bg-gray-600 h-8 w-8 mx-auto rounded"></div>
           </div>
           <div class="text-sm text-gray-500">收藏夹</div>
         </div>
         <div class="card p-6 text-center">
           <div class="text-2xl font-bold text-purple-600 dark:text-purple-400 mb-2">
-            {{ stats.followed_authors_count }}
+            <span v-if="!loading">{{ stats.followed_authors_count }}</span>
+            <div v-else class="animate-pulse bg-gray-300 dark:bg-gray-600 h-8 w-8 mx-auto rounded"></div>
           </div>
           <div class="text-sm text-gray-500">关注学者</div>
         </div>
         <div class="card p-6 text-center">
           <div class="text-2xl font-bold text-orange-600 dark:text-orange-400 mb-2">
-            {{ stats.reading_history_count }}
+            <span v-if="!loading">{{ stats.reading_history_count }}</span>
+            <div v-else class="animate-pulse bg-gray-300 dark:bg-gray-600 h-8 w-8 mx-auto rounded"></div>
           </div>
           <div class="text-sm text-gray-500">阅读历史</div>
         </div>
@@ -41,7 +45,18 @@
           <!-- 智能推荐 -->
           <div class="card p-6">
             <h2 class="text-xl font-semibold text-gray-900 dark:text-white mb-4">为您推荐</h2>
-            <div v-if="recommendations.length > 0" class="space-y-4">
+            
+            <!-- 加载状态 -->
+            <div v-if="loading" class="space-y-4">
+              <div v-for="i in 3" :key="i" class="animate-pulse p-4 border border-gray-200 dark:border-gray-700 rounded">
+                <div class="h-4 bg-gray-300 dark:bg-gray-600 rounded w-3/4 mb-2"></div>
+                <div class="h-3 bg-gray-200 dark:bg-gray-700 rounded w-1/2 mb-2"></div>
+                <div class="h-3 bg-gray-200 dark:bg-gray-700 rounded w-1/3"></div>
+              </div>
+            </div>
+            
+            <!-- 实际内容 -->
+            <div v-else-if="recommendations.length > 0" class="space-y-4">
               <div
                 v-for="rec in recommendations"
                 :key="rec.paper.id"
@@ -53,13 +68,24 @@
                 <p class="text-xs text-blue-600 dark:text-blue-400">{{ rec.reason }}</p>
               </div>
             </div>
+            
             <p v-else class="text-gray-500 dark:text-gray-400">暂无推荐内容</p>
           </div>
 
           <!-- 最近收藏 -->
           <div class="card p-6">
             <h2 class="text-xl font-semibold text-gray-900 dark:text-white mb-4">最近收藏</h2>
-            <div v-if="recentBookmarks.length > 0" class="space-y-4">
+            
+            <!-- 加载状态 -->
+            <div v-if="loading" class="space-y-4">
+              <div v-for="i in 3" :key="i" class="animate-pulse p-4">
+                <div class="h-4 bg-gray-300 dark:bg-gray-600 rounded w-3/4 mb-2"></div>
+                <div class="h-3 bg-gray-200 dark:bg-gray-700 rounded w-1/2"></div>
+              </div>
+            </div>
+            
+            <!-- 实际内容 -->
+            <div v-else-if="recentBookmarks.length > 0" class="space-y-4">
               <div
                 v-for="paper in recentBookmarks"
                 :key="paper.id"
@@ -70,6 +96,7 @@
                 <p class="text-sm text-gray-600 dark:text-gray-400">{{ paper.author_names.join(', ') }}</p>
               </div>
             </div>
+            
             <p v-else class="text-gray-500 dark:text-gray-400">暂无收藏内容</p>
           </div>
         </div>
@@ -78,7 +105,20 @@
         <div class="space-y-8">
           <div class="card p-6">
             <h2 class="text-xl font-semibold text-gray-900 dark:text-white mb-4">关注的学者</h2>
-            <div v-if="followedAuthors.length > 0" class="space-y-4">
+            
+            <!-- 加载状态 -->
+            <div v-if="loading" class="space-y-4">
+              <div v-for="i in 3" :key="i" class="animate-pulse flex items-center space-x-3 p-3">
+                <div class="w-10 h-10 bg-gray-300 dark:bg-gray-600 rounded-full"></div>
+                <div class="flex-1">
+                  <div class="h-3 bg-gray-300 dark:bg-gray-600 rounded w-3/4 mb-2"></div>
+                  <div class="h-2 bg-gray-200 dark:bg-gray-700 rounded w-1/2"></div>
+                </div>
+              </div>
+            </div>
+            
+            <!-- 实际内容 -->
+            <div v-else-if="followedAuthors.length > 0" class="space-y-4">
               <div
                 v-for="author in followedAuthors"
                 :key="author.id"
@@ -98,6 +138,7 @@
                 </div>
               </div>
             </div>
+            
             <p v-else class="text-gray-500 dark:text-gray-400">暂无关注的学者</p>
           </div>
         </div>
@@ -112,6 +153,7 @@ import { ref, onMounted } from 'vue'
 import type { Paper, Author } from '@/types'
 import { api } from '@/services/api'
 
+const loading = ref(true)
 const stats = ref({
   total_bookmarks: 0,
   total_folders: 0,
@@ -134,6 +176,7 @@ const getInitials = (name: string) => {
 
 const fetchDashboard = async () => {
   try {
+    loading.value = true
     const [dashboardRes, recommendationsRes] = await Promise.all([
       api.workspace.dashboard(),
       api.workspace.recommendations({ limit: 5 })
@@ -146,6 +189,8 @@ const fetchDashboard = async () => {
     recommendations.value = recommendationsRes.data.recommendations
   } catch (error) {
     console.error('获取工作台数据失败:', error)
+  } finally {
+    loading.value = false
   }
 }
 

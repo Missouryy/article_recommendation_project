@@ -45,8 +45,12 @@ apiClient.interceptors.response.use(
     const userStore = useUserStore()
     
     if (error.response?.status === 401) {
-      userStore.logout()
-      window.location.href = '/login'
+      // 只有在非论文详情页面时才跳转到登录页
+      const currentPath = window.location.pathname
+      if (!currentPath.includes('/papers/')) {
+        userStore.logout()
+        window.location.href = '/login'
+      }
     }
     
     return Promise.reject(error)
@@ -147,6 +151,12 @@ export const api = {
       apiClient.post('/recommendations/feedback', null, { params: { paper_id: paperId, feedback_type: feedbackType } }),
     refresh: () => apiClient.post('/recommendations/refresh'),
   },
+
+  // 系统状态相关
+  system: {
+    status: () => apiClient.get('/system/status'),
+    health: () => apiClient.get('/health')
+  }
 }
 
 export default apiClient

@@ -1,7 +1,7 @@
 <template>
   <div class="min-h-screen bg-gray-50 dark:bg-gray-900">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-8">
-      <button @click="$router.back()" class="mb-6 btn-secondary flex items-center gap-2 hover:bg-gray-300 dark:hover:bg-gray-500 transition-colors">
+      <button @click="goBack" class="mb-6 btn-secondary flex items-center gap-2 hover:bg-gray-300 dark:hover:bg-gray-500 transition-colors">
         <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/></svg>
         返回
       </button>
@@ -138,14 +138,14 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { api } from '@/services/api'
 import { useUserStore } from '@/stores/user'
 import CitationGraph from '@/components/CitationGraph.vue'
 import type { Paper } from '@/types'
 
-
 const route = useRoute()
+const router = useRouter()
 const userStore = useUserStore()
 
 
@@ -229,6 +229,16 @@ const generateSummary = async () => {
     console.error('生成总结失败:', error)
   } finally {
     summaryLoading.value = false
+  }
+}
+
+const goBack = () => {
+  // 优先使用浏览器历史记录返回
+  if (window.history.length > 1) {
+    router.back()
+  } else {
+    // 如果没有历史记录，返回到主页
+    router.push('/')
   }
 }
 
