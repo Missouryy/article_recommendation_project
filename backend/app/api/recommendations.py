@@ -83,6 +83,9 @@ async def get_personalized_recommendations(
         # 记录用户访问推荐页面的行为
         await user_manager.add_reading_history(current_user.id, "recommendation_page_visit")
         
+        # 确保推荐系统已加载
+        await recommender.ensure_loaded()
+        
         # 获取推荐结果 - 默认使用日常推荐
         recommendations = await recommender.get_daily_recommendations(
             user_id=current_user.id,
@@ -157,6 +160,9 @@ async def get_daily_recommendations(
         # 记录用户访问推荐页面的行为
         await user_manager.add_reading_history(current_user.id, "daily_recommendation_visit")
         
+        # 确保推荐系统已加载
+        await recommender.ensure_loaded()
+        
         # 获取推荐结果
         recommendations = await recommender.get_daily_recommendations(
             user_id=current_user.id,
@@ -229,6 +235,9 @@ async def get_preference_recommendations(
         # 记录用户访问推荐页面的行为
         await user_manager.add_reading_history(current_user.id, "preference_recommendation_visit")
         
+        # 确保推荐系统已加载
+        await recommender.ensure_loaded()
+        
         # 获取推荐结果
         recommendations = await recommender.get_preference_recommendations(
             user_id=current_user.id,
@@ -297,6 +306,9 @@ async def get_popular_recommendations(
         热门论文列表，按重要度排序
     """
     try:
+        # 确保推荐系统已加载
+        await recommender.ensure_loaded()
+        
         # 获取热门推荐
         popular_papers = await recommender.get_popular_recommendations(limit, offset)
         
@@ -338,6 +350,9 @@ async def get_trending_topics(
         热门主题列表，按热度排序
     """
     try:
+        # 确保推荐系统已加载
+        await recommender.ensure_loaded()
+        
         trending_topics = await recommender.get_trending_topics(limit)
         
         response = []
