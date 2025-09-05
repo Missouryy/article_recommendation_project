@@ -91,16 +91,58 @@ academic_project/
 - Node.js 16+
 - npm/yarn
 
-### 安装与运行
+### 一键启动（推荐）
+
+#### Windows 用户
+```powershell
+# 快速启动（推荐）
+.\quick_start.ps1
+
+# 完整安装和启动
+.\start_project.ps1
+```
+
+#### macOS 用户
+```bash
+# 快速启动（推荐，需要先安装）
+./quick_start_macos.sh
+
+# 简化安装+启动
+./start_macos.sh
+
+# 完整安装和启动
+./start_project.sh
+```
+
+#### Linux 用户
+```bash
+# 完整安装和启动
+./start_project.sh
+```
+
+### 手动安装
 
 #### 1. 设置后端环境
 
+**Windows:**
 ```powershell
 # 创建虚拟环境
 python -m venv article_recommend
 
-# 激活虚拟环境 (Windows PowerShell)
+# 激活虚拟环境
 ./article_recommend/Scripts/Activate.ps1
+
+# 安装后端依赖
+pip install -r ./backend/requirements.txt
+```
+
+**macOS/Linux:**
+```bash
+# 创建虚拟环境
+python3 -m venv article_recommend
+
+# 激活虚拟环境
+source article_recommend/bin/activate
 
 # 安装后端依赖
 pip install -r ./backend/requirements.txt

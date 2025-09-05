@@ -1,6 +1,10 @@
 <template>
   <div id="app" :class="{ 'dark': isDark }">
-    <div class="min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors duration-300">
+    <!-- 系统加载页面 - 只在初始加载且未导航时显示 -->
+    <SystemLoading v-if="!systemReady && !hasNavigated" />
+    
+    <!-- 主应用 -->
+    <div v-else class="min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors duration-300">
       <!-- 导航栏 -->
 
       <nav class="bg-white/80 dark:bg-gray-800/80 backdrop-blur-md shadow-soft border-b border-gray-200/60 dark:border-gray-700/60 animate-fade-in">
@@ -87,12 +91,19 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useUserStore } from './stores/user'
 import { useThemeStore } from './stores/theme'
+import { useRoute } from 'vue-router'
+import SystemLoading from './views/SystemLoading.vue'
+import axios from 'axios'
 
 const userStore = useUserStore()
 const themeStore = useThemeStore()
+const route = useRoute()
+
+const systemReady = ref(false)
+const hasNavigated = ref(false) // 标记用户是否已经导航到具体页面
 
 const showUserMenu = ref(false)
 const notification = ref({
@@ -119,9 +130,82 @@ const logout = async () => {
   showUserMenu.value = false
 }
 
+// App级别的重试控制
+let appRetryCount = 0
+let appRetryDelay = 5000 // 5秒初始延迟
+let statusCheckInterval: NodeJS.Timeout | null = null
+
+const checkSystemStatus = async () => {
+  // 如果系统已经准备好，停止检查
+  if (systemReady.value) {
+    if (statusCheckInterval) {
+      clearTimeout(statusCheckInterval)
+      statusCheckInterval = null
+    }
+    return
+  }
+  
+  try {
+    const response = await axios.get('/api/system/status', {
+      timeout: 5000,
+      params: { _t: Date.now() }
+    })
+    if (response.data.overall === 'ready') {
+      systemReady.value = true
+      // 系统准备好后，停止检查
+      appRetryCount = 0
+      appRetryDelay = 5000
+      if (statusCheckInterval) {
+        clearTimeout(statusCheckInterval)
+        statusCheckInterval = null
+      }
+      return
+    } else {
+      // 如果系统未准备好，继续检查
+      statusCheckInterval = setTimeout(checkSystemStatus, appRetryDelay)
+    }
+  } catch (error: any) {
+    appRetryCount++
+    
+    // 静默处理连接错误，不在控制台输出
+    if (error.code === 'ECONNREFUSED' || 
+        error.message?.includes('ECONNREFUSED') || 
+        error.response?.status === 503) {
+      // 静默处理，使用指数退避
+      if (appRetryCount > 3) {
+        appRetryDelay = Math.min(appRetryDelay * 1.5, 15000) // 最大15秒
+      }
+    } else {
+      console.error('App系统状态检查失败:', error)
+      appRetryCount = 0
+      appRetryDelay = 5000
+    }
+    statusCheckInterval = setTimeout(checkSystemStatus, appRetryDelay)
+  }
+}
+
+// 监听路由变化，标记用户已导航
+watch(() => route.path, (newPath) => {
+  // 如果用户访问了具体页面（非根路径），标记为已导航
+  if (newPath !== '/' && !hasNavigated.value) {
+    hasNavigated.value = true
+  }
+}, { immediate: true })
+
 onMounted(() => {
+  // 检查系统状态
+  checkSystemStatus()
+  
   // 初始化用户状态
   userStore.initializeAuth()
+})
+
+// 组件卸载时清理定时器
+onUnmounted(() => {
+  if (statusCheckInterval) {
+    clearTimeout(statusCheckInterval)
+    statusCheckInterval = null
+  }
 })
 </script>
 

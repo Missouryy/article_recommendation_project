@@ -1,5 +1,6 @@
 import os
 import json
+import asyncio
 import numpy as np
 import faiss
 import aiosqlite
@@ -20,12 +21,37 @@ class IntelligentRecommender:
         self.index = None
         self.string_to_int_map = {}
         self.int_to_string_map = {}
+        self._loading = False
+        self._loaded = False
         
         # 获取项目根目录
         self.project_root = Path(__file__).parent.parent.parent.parent
         
-        # 加载资源
-        self._load_resources()
+        # 延迟加载资源（不在初始化时加载）
+        # self._load_resources()
+    
+    async def ensure_loaded(self):
+        """确保资源已加载"""
+        if self._loaded:
+            return
+        
+        if self._loading:
+            # 如果正在加载，等待完成
+            while self._loading:
+                await asyncio.sleep(0.1)
+            return
+        
+        self._loading = True
+        try:
+            await asyncio.to_thread(self._load_resources)
+            self._loaded = True
+            logger.info("智能推荐系统资源加载完成")
+        except Exception as e:
+            logger.error(f"加载资源失败: {e}")
+            self._loading = False
+            raise
+        finally:
+            self._loading = False
     
     def _load_resources(self):
         """加载FAISS索引和ID映射"""
