@@ -110,7 +110,10 @@
       <!-- 推荐结果 -->
       <div v-else-if="recommendations.length > 0">
         <!-- 推荐摘要信息 -->
-        <div class="bg-blue-50 dark:bg-blue-900 border border-blue-200 dark:border-blue-700 rounded-lg p-4 mb-6">
+        <div
+            v-if="activeTab !== 'truth'"
+            class="bg-blue-50 dark:bg-blue-900 border border-blue-200 dark:border-blue-700 rounded-lg p-4 mb-6"
+        >
           <div class="flex items-center">
             <svg class="h-5 w-5 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -133,7 +136,7 @@
               <!-- 论文标题和基本信息 -->
               <div class="flex items-start justify-between">
                 <div class="flex-1">
-                  <div class="flex items-center justify-between mb-2">
+                  <div class="flex items-center mb-2">
                     <span class="inline-flex items-center justify-center w-6 h-6 rounded-full bg-blue-100 dark:bg-blue-900 text-blue-600 dark:text-blue-300 text-sm font-medium mr-3">
                       {{ index + 1 }}
                     </span>
@@ -251,8 +254,63 @@
           </div>
         </div>
 
+        <!-- 真值推荐分页条（仅真值页显示） -->
+        <div
+          v-if="activeTab === 'truth' && truthTotal > truthPageSize"
+          class="mt-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3"
+        >
+          <div class="text-sm text-gray-600 dark:text-gray-300">
+            共 <strong>{{ truthTotal }}</strong> 篇 ·
+            第 <strong>{{ truthPage }}</strong> / <strong>{{ truthTotalPages }}</strong> 页
+          </div>
+
+          <div class="flex items-center gap-2">
+            <button
+              class="px-3 py-1 rounded-md border text-sm disabled:opacity-50"
+              :disabled="truthPage <= 1"
+              @click="prevTruthPage"
+            >
+              上一页
+            </button>
+
+            <!-- 简洁页码：当前页前后各显示一个 -->
+            <button
+              v-for="p in [truthPage - 1, truthPage, truthPage + 1].filter(n => n >= 1 && n <= truthTotalPages)"
+              :key="p"
+              class="px-3 py-1 rounded-md border text-sm"
+              :class="p === truthPage ? 'bg-blue-600 text-white border-blue-600' : 'hover:bg-gray-50 dark:hover:bg-gray-700'"
+              @click="goToTruthPage(p)"
+            >
+              {{ p }}
+            </button>
+
+            <button
+              class="px-3 py-1 rounded-md border text-sm disabled:opacity-50"
+              :disabled="truthPage >= truthTotalPages"
+              @click="nextTruthPage"
+            >
+              下一页
+            </button>
+
+            <!-- 跳转到第几页 -->
+            <div class="ml-2 flex items-center text-sm">
+              <span class="mr-2">跳转到</span>
+              <input
+                type="number"
+                min="1"
+                :max="truthTotalPages"
+                :value="truthPage"
+                class="w-20 px-2 py-1 border rounded-md bg-white dark:bg-gray-700"
+                @keyup.enter="goToTruthPage(($event.target as HTMLInputElement).valueAsNumber || truthPage)"
+              />
+              <span class="ml-1">/ {{ truthTotalPages }}</span>
+            </div>
+          </div>
+        </div>
+
+
         <!-- 刷新推荐提示 -->
-        <div v-if="recommendations.length >= 20" class="mt-8 text-center">
+        <div v-if="activeTab !== 'truth' && recommendations.length >= 20" class="mt-8 text-center">
           <div class="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
             <svg class="inline-block w-5 h-5 text-blue-500 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
@@ -357,6 +415,25 @@ import { useRouter } from 'vue-router'
 import { useUserStore } from '@/stores/user'
 import { api } from '@/services/api'
 
+// —— 真值推荐分页状态（每页 20） ——
+const truthPage = ref(1)
+const truthPageSize = 20
+const truthTotal = ref(0)
+
+const truthTotalPages = computed(() =>
+  Math.max(1, Math.ceil(truthTotal.value / truthPageSize))
+)
+
+function goToTruthPage(p: number) {
+  const page = Math.min(Math.max(1, p), truthTotalPages.value)
+  if (page !== truthPage.value) {
+    truthPage.value = page
+    loadRecommendations()
+  }
+}
+function prevTruthPage() { goToTruthPage(truthPage.value - 1) }
+function nextTruthPage() { goToTruthPage(truthPage.value + 1) }
+
 const router = useRouter()
 const userStore = useUserStore()
 
@@ -394,6 +471,7 @@ onMounted(() => {
 // 监听活跃标签页变化
 watch(activeTab, () => {
   recommendations.value = []
+  if (activeTab.value === 'truth') truthPage.value = 1  // ← 新增：切到真值页时回到第1页
   loadRecommendations()
 })
 
@@ -432,10 +510,13 @@ const loadRecommendations = async () => {
       })
     }
     else if (activeTab.value === 'truth') {
-      response = await api.recommendations.getTruth({ limit: 20, offset: 0 })
-      const items = (response.data?.items ?? []) as any[]
+      const limit = truthPageSize
+      const offset = (truthPage.value - 1) * truthPageSize
+      const resp = await api.recommendations.getTruth({ limit, offset })
+      const items = (resp.data?.items ?? []) as any[]
+      truthTotal.value = resp.data?.total ?? items.length  // 记录总数
 
-      recommendations.value = items.map((it, idx) => {
+      recommendations.value = items.map(it => {
         const truthText = it.truth_value_text ?? `${((it.truth_value ?? 0) * 100).toFixed(1)}分`
         return {
           ...it,
