@@ -19,6 +19,7 @@
               <p><strong class="text-blue-600">日常推荐：</strong>基于前5篇收藏论文（权重1）+ 前10篇阅读历史（权重1.5）</p>
               <p><strong class="text-green-600">喜好推荐：</strong>基于10篇收藏论文（权重2）+ 前10篇阅读历史（权重1）</p>
               <p><strong class="text-purple-600">热门推荐：</strong>基于论文引用数和发表时间的热门论文</p>
+              <p><strong class="text-red-500">真值推荐：</strong>基于论文计算得出的真值</p>
             </div>
           </div>
           <div class="flex space-x-3">
