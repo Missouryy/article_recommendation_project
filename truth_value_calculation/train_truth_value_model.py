@@ -1,21 +1,4 @@
 # -*- coding: utf-8 -*-
-"""
-Train a truth-value regression model from 8 sources (graded + noisy3..9).
-Inputs per source: citations, fwci, abstract, keywords, year
-Output: normalized score in [0,1] (supervised from graded DB)
-
-Usage:
-python train_truth_value_model.py \
-  --graded openalex_5000_v1_graded.db \
-  --noisy_dbs openalex_5000_noisy3.db openalex_5000_noisy4.db openalex_5000_noisy5.db \
-               openalex_5000_noisy6.db openalex_5000_noisy7.db openalex_5000_noisy8.db openalex_5000_noisy9.db \
-  --epochs 30 --batch_size 64 --lr 1e-3
-
-Artifacts:
-- truthscore_model.pt           (模型权重)
-- feature_stats.json            (数值标准化与哈希设置)
-- id_coverage_report.json       (样本覆盖报告)
-"""
 
 import argparse
 import hashlib
@@ -34,16 +17,12 @@ import torch
 import torch.nn as nn
 from torch.utils.data import Dataset, DataLoader
 
-# -----------------------------
-# Utils
-# -----------------------------
 
 SEED = 42
 random.seed(SEED)
 np.random.seed(SEED)
 torch.manual_seed(SEED)
 
-# 按你提供的列名做了定制（short_id / publication_year / citation_count / fwci / abstract / keywords / norm_score）
 FEATURE_NAMES = {
     "id": ["short_id"],
     "citations": ["citation_count"],
@@ -57,7 +36,6 @@ FEATURE_NAMES = {
 WORD_RE = re.compile(r"[A-Za-z]+|[\u4e00-\u9fa5]+|\d+")
 
 def norm_id(row: Dict) -> Optional[str]:
-    """将一行记录映射到稳定的 paper_id（此处直接返回 short_id）。"""
     for k in FEATURE_NAMES["id"]:
         if k in row and pd.notna(row[k]):
             v = str(row[k]).strip()
@@ -66,7 +44,6 @@ def norm_id(row: Dict) -> Optional[str]:
     return None
 
 def select_best_table(conn: sqlite3.Connection) -> str:
-    """选取最可能包含所需列的表。"""
     tables = pd.read_sql_query("SELECT name FROM sqlite_master WHERE type='table';", conn)
     if tables.empty:
         raise RuntimeError("No tables found in DB.")
@@ -95,7 +72,6 @@ def pick_first_column(df: pd.DataFrame, candidates: List[str]) -> Optional[str]:
     return None
 
 def parse_abstract(val) -> str:
-    """支持普通文本或 OpenAlex abstract_inverted_index（dict word->positions）。"""
     if isinstance(val, dict):
         xs = []
         for w, pos in val.items():
@@ -121,7 +97,6 @@ def parse_abstract(val) -> str:
     return str(val)
 
 def parse_keywords(val) -> str:
-    """健壮解析 keywords：list/tuple/dict/ndarray/JSON 字符串/分隔字符串均可。"""
     if isinstance(val, np.ndarray):
         val = val.tolist()
 
@@ -159,12 +134,11 @@ def parse_keywords(val) -> str:
                     out.append(s)
         return " ".join(out) if out else ""
 
-    # 标量 / 字符串
     if isinstance(val, str):
         s = val.strip()
         if (s.startswith("[") and s.endswith("]")) or (s.startswith("{") and s.endswith("}")):
             try:
-                data = json.loads(s.replace("'", '"'))  # 兼容 Python 风格单引号列表
+                data = json.loads(s.replace("'", '"'))
                 return parse_keywords(data)
             except Exception:
                 pass
@@ -182,7 +156,6 @@ def tokenize(text: str) -> List[str]:
     return [tok.lower() for tok in WORD_RE.findall(text)]
 
 def hash_bow(tokens: List[str], dim: int = 256) -> np.ndarray:
-    """BoW 哈希向量（可复用，速度快）。"""
     vec = np.zeros(dim, dtype=np.float32)
     for w in tokens:
         h = int(hashlib.sha1(w.encode("utf-8")).hexdigest(), 16)
@@ -212,18 +185,13 @@ class SourceFeatures:
     kw_text: str
     available: bool
 
-# -----------------------------
-# Data Loading
-# -----------------------------
 
 def load_source_from_db(db_path: str, expect_label: bool = False) -> Tuple[pd.DataFrame, Optional[pd.Series]]:
-    """从单个 DB 读出特征与（可选）标签。"""
     conn = sqlite3.connect(db_path)
     table = select_best_table(conn)
     df = pd.read_sql_query(f"SELECT * FROM '{table}';", conn)
     conn.close()
 
-    # 尝试把 JSON 字符串列反序列化
     for c in df.columns:
         if df[c].dtype == object:
             sample = df[c].dropna().astype(str).head(5).tolist()
@@ -268,7 +236,6 @@ def load_source_from_db(db_path: str, expect_label: bool = False) -> Tuple[pd.Da
     return feats, labels
 
 def attach_source_prefix(df: pd.DataFrame, db_path: str) -> pd.DataFrame:
-    """将列改名为 '<源前缀>_<字段名>'，例如 openalex_5000_noisy3_citations。"""
     base = os.path.splitext(os.path.basename(db_path))[0]
     prefix = base
     rename_map = {}
@@ -279,7 +246,6 @@ def attach_source_prefix(df: pd.DataFrame, db_path: str) -> pd.DataFrame:
     return out
 
 def merge_sources(graded_df: pd.DataFrame, noisy_list: List[pd.DataFrame]) -> pd.DataFrame:
-    """将 graded（改名为 graded_*）与各 noisy（已加文件名前缀）按 paper_id 外连接到同一张宽表。"""
     ids = set(graded_df["paper_id"])
     dfs = []
 
@@ -304,9 +270,6 @@ def merge_sources(graded_df: pd.DataFrame, noisy_list: List[pd.DataFrame]) -> pd
     merged = merged.loc[list(ids)]
     return merged.reset_index()
 
-# -----------------------------
-# Text Hashing + Feature Building
-# -----------------------------
 
 @dataclass
 class HashConfig:
@@ -348,10 +311,9 @@ def assemble_wide_frame(graded_db: str, noisy_dbs: List[str]) -> Tuple[pd.DataFr
         f = attach_source_prefix(f, p)
         noisy_feats_list.append(f)
 
-    # 注意：不再对 graded_feats 做“文件名前缀”处理，避免重复源
     merged = merge_sources(graded_feats, noisy_feats_list)
 
-    # 对齐标签（并确保 0-1）
+    # 对齐标签
     y = labels.reindex(merged["paper_id"])
     y_vals = y.astype(float).values
     if np.any(np.isnan(y_vals)):
@@ -363,7 +325,6 @@ def assemble_wide_frame(graded_db: str, noisy_dbs: List[str]) -> Tuple[pd.DataFr
     return merged, y
 
 def compute_numeric_stats(train_df: pd.DataFrame, sources: List[str]) -> Dict[str, Dict[str, NumericStats]]:
-    """只用训练集统计均值方差；若列全是 NaN，就回落到 mean=0,std=1，避免警告。"""
     stats: Dict[str, Dict[str, NumericStats]] = {}
     for s in sources:
         stats[s] = {}
@@ -397,7 +358,6 @@ def row_to_source_feature(row: pd.Series, source: str) -> SourceFeatures:
     return SourceFeatures(row["paper_id"], citations, fwci, year, abs_text, kw_text, available)
 
 def vectorize_source(sf: SourceFeatures, source_name: str, stats: FeatureStats) -> Tuple[np.ndarray, int]:
-    """单源向量：数值 z-score（其中 citations 先 log1p），外加摘要/关键词哈希。"""
     num_vec = []
     for n in ["citations", "fwci", "year"]:
         st = stats.numeric.get(source_name, {}).get(n, NumericStats(0.0, 1.0))
@@ -417,12 +377,8 @@ def vectorize_source(sf: SourceFeatures, source_name: str, stats: FeatureStats) 
     mask = 1 if sf.available else 0
     return full, mask
 
-# -----------------------------
-# Dataset / Model
-# -----------------------------
 
 class TruthDataset(Dataset):
-    """预计算版 Dataset：构造时把每行每源的特征向量/掩码算好，训练更快。"""
     def __init__(self, df: pd.DataFrame, y: pd.Series, feature_stats: FeatureStats):
         self.sources = feature_stats.sources_order
         self.stats = feature_stats
@@ -466,10 +422,10 @@ class SourceEncoder(nn.Module):
     def forward(self, x: torch.Tensor, src_ids: torch.Tensor) -> torch.Tensor:
         B, S, F = x.shape
         if src_ids.dim() == 1:
-            src_ids = src_ids.unsqueeze(0).expand(B, -1)  # [B,S]
-        src_e = self.src_emb(src_ids)                     # [B,S,E]
-        z = torch.cat([x, src_e], dim=-1)                 # [B,S,F+E]
-        out = self.mlp(z)                                 # [B,S,out_dim]
+            src_ids = src_ids.unsqueeze(0).expand(B, -1)
+        src_e = self.src_emb(src_ids)
+        z = torch.cat([x, src_e], dim=-1)
+        out = self.mlp(z)
         return out
 
 class TruthModel(nn.Module):
@@ -497,9 +453,6 @@ class TruthModel(nn.Module):
         yhat = self.sigmoid(self.head(pooled)).squeeze(-1)  # [B]
         return yhat
 
-# -----------------------------
-# Training / Eval
-# -----------------------------
 
 def split_train_valid_test(ids: List[str], ratios=(0.7, 0.15, 0.15)) -> Tuple[List[int], List[int], List[int]]:
     idx = list(range(len(ids)))
@@ -545,7 +498,6 @@ def train_loop(model, tr_loader, va_loader, epochs=30, lr=1e-3, device="cpu", pa
             tr_loss += float(loss.item()) * X.size(0)
         tr_loss /= len(tr_loader.dataset)
 
-        # validation
         model.eval()
         va_loss = 0.0
         preds = []
@@ -581,10 +533,6 @@ def train_loop(model, tr_loader, va_loader, epochs=30, lr=1e-3, device="cpu", pa
         model.load_state_dict(best_state)
     return model
 
-# -----------------------------
-# Main
-# -----------------------------
-
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--graded", type=str, default="openalex_5000_v1_graded.db")
@@ -609,7 +557,7 @@ def main():
     print("Loading and merging sources...")
     wide_df, y = assemble_wide_frame(args.graded, args.noisy_dbs)
 
-    # 推断 8 个源（严格按后缀）
+    # 推断 8 个源
     cols = wide_df.columns.tolist()
     sources = build_sources_order(cols)
     print(f"Detected sources ({len(sources)}): {sources}")
@@ -628,7 +576,6 @@ def main():
                 for df in (tr_df, va_df, te_df):
                     df[col] = np.nan
 
-    # 只用训练集统计数值特征的均值/方差
     num_stats = compute_numeric_stats(tr_df, sources)
     fstats = FeatureStats(
         numeric=num_stats,
@@ -636,7 +583,6 @@ def main():
         sources_order=sources
     )
 
-    # 构造预计算版 Dataset（显著加速）
     train_ds = TruthDataset(tr_df, y_tr, fstats)
     valid_ds = TruthDataset(va_df, y_va, fstats)
     test_ds  = TruthDataset(te_df, y_te, fstats)
