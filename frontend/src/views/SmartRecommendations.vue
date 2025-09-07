@@ -132,7 +132,7 @@
               <!-- 论文标题和基本信息 -->
               <div class="flex items-start justify-between">
                 <div class="flex-1">
-                  <div class="flex items-center mb-2">
+                  <div class="flex items-center justify-between mb-2">
                     <span class="inline-flex items-center justify-center w-6 h-6 rounded-full bg-blue-100 dark:bg-blue-900 text-blue-600 dark:text-blue-300 text-sm font-medium mr-3">
                       {{ index + 1 }}
                     </span>
@@ -204,6 +204,13 @@
                     </div>
                   </div>
                 </div>
+
+                <span
+                  v-if="activeTab === 'truth' || paper.truth_value != null"
+                  class="ml-4 px-2 py-1 rounded-md text-xs bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200 whitespace-nowrap"
+                >
+                  真值：{{ paper.truth_value_text ?? ((paper.truth_value ?? 0) * 100).toFixed(1) + '分' }}
+                </span>
 
                 <!-- 操作按钮 -->
                 <div class="flex flex-col space-y-2 ml-4">
@@ -366,7 +373,8 @@ const activeTab = ref('daily')
 const tabs = [
   { key: 'daily', name: '日常推荐' },
   { key: 'preference', name: '喜好推荐' },
-  { key: 'popular', name: '热门推荐' }
+  { key: 'popular', name: '热门推荐' },
+  { key: 'truth', name: '真值推荐' },
 ]
 
 // 计算属性
@@ -417,13 +425,30 @@ const loadRecommendations = async () => {
         limit: 20,
         include_reasons: true
       })
-    } else {
+    } else if (activeTab.value === 'popular') {
       response = await api.recommendations.getPopular({
         limit: 20
       })
     }
+    else if (activeTab.value === 'truth') {
+      response = await api.recommendations.getTruth({ limit: 20, offset: 0 })
+      const items = (response.data?.items ?? []) as any[]
+
+      recommendations.value = items.map((it, idx) => {
+        const truthText = it.truth_value_text ?? `${((it.truth_value ?? 0) * 100).toFixed(1)}分`
+        return {
+          ...it,
+          paper_id: it.short_id || it.id,
+          relevance_score: it.truth_value ?? 0,
+          importance_score: Math.max(0, Math.min(1, (it.fwci ?? 0) / 10)),
+          recommendation_reason: `按真值从高到低排序（${truthText}）`,
+        }
+      })
+    }
     
-    recommendations.value = response.data || []
+    if (activeTab.value !== 'truth') {
+      recommendations.value = response.data || []
+    }
   } catch (err: any) {
     console.error('加载推荐失败:', err)
     error.value = err.response?.data?.detail || '加载推荐失败，请稍后重试'
