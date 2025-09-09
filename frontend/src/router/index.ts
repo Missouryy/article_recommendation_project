@@ -12,6 +12,8 @@ const Authors = () => import('../views/Authors.vue')
 const AuthorDetail = () => import('../views/AuthorDetail.vue')
 const Workspace = () => import('../views/Workspace.vue')
 const Profile = () => import('../views/Profile.vue')
+const SmartRecommendations = () => import('../views/SmartRecommendations.vue')
+
 
 const router = createRouter({
   history: createWebHistory(),
@@ -77,13 +79,19 @@ const router = createRouter({
       meta: { title: '个人资料', requiresAuth: true }
     },
     {
+      path: '/recommendations',
+      name: 'SmartRecommendations',
+      component: SmartRecommendations,
+      meta: { title: '智能推荐' }
+    },
+    {
       path: '/:pathMatch(.*)*',
       name: 'NotFound',
       component: () => import('../views/NotFound.vue'),
       meta: { title: '页面未找到' }
     }
   ],
-  scrollBehavior(_to, _from, savedPosition) {
+  scrollBehavior(to, from, savedPosition) {
     if (savedPosition) {
       return savedPosition
     } else {
@@ -93,7 +101,7 @@ const router = createRouter({
 })
 
 // 路由守卫
-router.beforeEach(async (to, _from, next) => {
+router.beforeEach(async (to, from, next) => {
   const userStore = useUserStore()
   
   document.title = to.meta.title ? `${to.meta.title} - 学术推荐系统` : '学术推荐系统'

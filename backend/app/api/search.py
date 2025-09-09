@@ -8,9 +8,11 @@ from ..models.paper import SearchRequest, SearchResponse, PaperSummary, SearchFi
 from ..models.user import User
 from ..api.auth import get_current_user, get_current_user_optional
 from ..db.database import db, user_manager
+
 from ..algorithms.recommender import rerank_search_results
 
 router = APIRouter(prefix="/search", tags=["搜索"])
+
 
 @router.post("/", response_model=SearchResponse, summary="论文搜索")
 async def search_papers(search_request: SearchRequest, current_user: Optional[User] = Depends(get_current_user_optional)):
@@ -44,8 +46,8 @@ async def search_papers(search_request: SearchRequest, current_user: Optional[Us
         sort_order=search_request.sort_order
     )
     
-    # 如果用户已登录，仅在按相关度排序时应用个性化重排序
-    if current_user and search_request.sort_by == "relevance":
+    # 如果用户已登录，应用个性化重排序
+    if current_user:
         user_data = await user_manager.get_user_by_id(current_user.id)
         if user_data:
             sorted_results = rerank_search_results(

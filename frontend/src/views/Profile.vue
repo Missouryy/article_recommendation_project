@@ -63,7 +63,7 @@
             <button
               type="submit"
               :disabled="userStore.loading"
-              class="btn-primary"
+              class="btn btn-primary"
             >
               {{ userStore.loading ? '保存中...' : '保存更改' }}
             </button>
@@ -110,7 +110,7 @@
             <button
               type="submit"
               :disabled="!isPasswordFormValid || userStore.loading"
-              class="btn-primary"
+              class="btn btn-primary"
             >
               修改密码
             </button>

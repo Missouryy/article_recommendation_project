@@ -126,8 +126,7 @@ const getInitials = (name: string) => {
 const fetchAuthor = async () => {
   try {
     loading.value = true
-    const authorId = decodeURIComponent(route.params.id as string)
-
+    const authorId = route.params.id as string
     const [authorRes, papersRes] = await Promise.all([
       api.authors.get(authorId),
       api.authors.papers(authorId, { limit: 10, sort_by: 'citation', order: 'desc' })
@@ -143,6 +142,7 @@ const fetchAuthor = async () => {
         const followedList = followedRes.data as Author[]
         isFollowing.value = followedList.some(a => a.id === authorId)
       } catch (e) {
+        // 忽略关注列表获取失败
         isFollowing.value = false
       }
     } else {

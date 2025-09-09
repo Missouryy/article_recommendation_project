@@ -53,6 +53,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
+import type { Author } from '@/types'
 import { api } from '@/services/api'
 import type { Author } from '@/types'
 

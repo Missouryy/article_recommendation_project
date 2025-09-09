@@ -87,7 +87,7 @@
                 v-for="paper in searchResults"
                 :key="paper.id"
                 class="card-hover p-6 cursor-pointer"
-                @click="goToDetail(paper.short_id)"
+                @click="goToDetail(paper.short_id || paper.id)"
               >
                 <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-2">
                   {{ paper.title }}
@@ -137,6 +137,7 @@ import { ref, onMounted, onActivated, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { api } from '@/services/api'
 import type { Paper } from '@/types'
+import CitationGraph from '@/components/CitationGraph.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -150,6 +151,8 @@ const currentPage = ref(1)
 const totalPages = computed(() => Math.max(1, Math.ceil(totalResults.value / pageSize.value)))
 const sortBy = ref<'relevance' | 'date' | 'citation' | 'truth_value'>('relevance')
 const sortOrder = ref<'asc' | 'desc'>('desc')
+const activeView = ref('list')
+const selectedPaperForGraph = ref(null)
 
 let lastScrollTop = 0
 
@@ -195,6 +198,11 @@ const handleSearch = async (resetPage = false) => {
     searchResults.value = response.data.papers
     totalResults.value = response.data.total
     updateRouteQuery()
+    
+    // 如果有搜索结果，默认选择第一篇论文用于图谱显示
+    if (response.data.papers.length > 0) {
+      selectedPaperForGraph.value = response.data.papers[0]
+    }
   } catch (error) {
     console.error('搜索失败:', error)
   } finally {
@@ -213,6 +221,17 @@ const prevPage = async () => {
   currentPage.value -= 1
   await handleSearch(false)
 }
+
+const selectPaper = (paper: any) => {
+  if (activeView.value === 'list') {
+    // 在列表视图中点击论文，跳转到详情页
+    window.open(`/papers/${paper.short_id || paper.id}`, '_blank')
+  } else {
+    // 在图谱视图中点击论文，更新图谱
+    selectedPaperForGraph.value = paper
+  }
+}
+
 
 onMounted(() => {
   const q = route.query.q as string
@@ -235,21 +254,36 @@ onMounted(() => {
 </script>
 
 <style scoped>
-.search-bar-move-enter-active, .search-header-move-enter-active {
-  transition: all 0.5s cubic-bezier(.4, 0, .2, 1);
+.search-title-fade-enter-active, .search-title-fade-leave-active {
+  transition: opacity 0.5s cubic-bezier(.4,0,.2,1);
+}
+.search-title-fade-enter-from, .search-title-fade-leave-to {
+  opacity: 0;
+}
+.search-title-fade-enter-to, .search-title-fade-leave-from {
+  opacity: 1;
 }
 
-.search-bar-move-enter-from, .search-header-move-enter-from {
+.search-bar-move-enter-active, .search-bar-move-leave-active {
+  transition: all 0.5s cubic-bezier(.4,0,.2,1);
+}
+.search-bar-move-enter-from, .search-bar-move-leave-to {
   opacity: 0;
   transform: translateY(40px);
 }
-
-.search-bar-move-enter-to, .search-header-move-enter-to {
+.search-bar-move-enter-to, .search-bar-move-leave-from {
   opacity: 1;
   transform: translateY(0);
 }
-
-.search-title-fade-leave-active, .search-bar-move-leave-active, .search-header-move-leave-active {
-  transition: all 0s;
+.search-header-move-enter-active, .search-header-move-leave-active {
+  transition: all 0.5s cubic-bezier(.4,0,.2,1);
+}
+.search-header-move-enter-from, .search-header-move-leave-to {
+  opacity: 0;
+  transform: translateY(40px);
+}
+.search-header-move-enter-to, .search-header-move-leave-from {
+  opacity: 1;
+  transform: translateY(0);
 }
 </style>

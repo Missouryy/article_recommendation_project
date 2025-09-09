@@ -1,21 +1,28 @@
 <template>
   <div id="app" :class="{ 'dark': isDark }">
-    <div class="min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors duration-300">
-      <nav class="bg-white dark:bg-gray-800 shadow-lg border-b border-gray-200 dark:border-gray-700 animate-fade-in">
+    <!-- 系统加载页面 - 只在初始加载且未导航时显示 -->
+    <SystemLoading v-if="!systemReady && !hasNavigated" />
+    
+    <!-- 主应用 -->
+    <div v-else class="min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors duration-300">
+      <!-- 导航栏 -->
+      <nav class="bg-white/80 dark:bg-gray-800/80 backdrop-blur-md shadow-soft border-b border-gray-200/60 dark:border-gray-700/60 animate-fade-in">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div class="flex justify-between h-16">
             <div class="flex items-center">
+              <!-- Logo -->
               <router-link to="/" class="flex-shrink-0 flex items-center">
                 <img src="@/assets/logo.png" alt="Logo" class="h-8 w-8 rounded-lg mr-3 shadow-md" />
                 <span class="font-bold text-xl text-gray-900 dark:text-white">学术推荐</span>
               </router-link>
               
               <div class="hidden md:ml-10 md:flex md:space-x-8">
-                 <a @click="handleNavReset('Search', '/search')" class="nav-link cursor-pointer">智能搜索</a>
-                 <a @click="handleNavReset('Papers', '/papers')" class="nav-link cursor-pointer">论文库</a>
-                 <router-link to="/authors" class="nav-link">学者库</router-link>
-                 <router-link to="/workspace" class="nav-link">工作台</router-link>
-               </div>
+                <a @click="handleNavReset('Search', '/search')" class="nav-link cursor-pointer">智能搜索</a>
+                <a @click="handleNavReset('Papers', '/papers')" class="nav-link cursor-pointer">论文库</a>
+                <router-link to="/authors" class="nav-link">学者库</router-link>
+                <router-link to="/recommendations" class="nav-link">智能推荐</router-link>
+                <router-link to="/workspace" class="nav-link">工作台</router-link>
+              </div>
             </div>
             
             <div class="flex items-center space-x-4">
@@ -36,7 +43,8 @@
                   @click="showUserMenu = !showUserMenu"
                   class="flex items-center text-sm rounded-full focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
                 >
-                  <div class="h-8 w-8 rounded-full bg-gray-300 flex items-center justify-center text-gray-600 text-sm font-medium">
+                  <!-- 修复：使用CSS生成的头像，不依赖图片文件 -->
+                  <div class="h-8 w-8 rounded-full bg-gradient-to-r from-blue-600 to-cyan-500 text-white flex items-center justify-center text-sm font-medium shadow-soft">
                     {{ userStore.userInitials || 'U' }}
                   </div>
                 </button>
@@ -77,14 +85,21 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, nextTick } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { useUserStore } from './stores/user'
 import { useThemeStore } from './stores/theme'
+import { useRoute } from 'vue-router'
+import SystemLoading from './views/SystemLoading.vue'
+import axios from 'axios'
 
 const router = useRouter()
 const userStore = useUserStore()
 const themeStore = useThemeStore()
+const route = useRoute()
+
+const systemReady = ref(false)
+const hasNavigated = ref(false) // 标记用户是否已经导航到具体页面
 
 const showUserMenu = ref(false)
 const notification = ref({
@@ -124,9 +139,82 @@ const logout = async () => {
   showUserMenu.value = false
 }
 
+// App级别的重试控制
+let appRetryCount = 0
+let appRetryDelay = 5000 // 5秒初始延迟
+let statusCheckInterval: NodeJS.Timeout | null = null
+
+const checkSystemStatus = async () => {
+  // 如果系统已经准备好，停止检查
+  if (systemReady.value) {
+    if (statusCheckInterval) {
+      clearTimeout(statusCheckInterval)
+      statusCheckInterval = null
+    }
+    return
+  }
+  
+  try {
+    const response = await axios.get('/api/system/status', {
+      timeout: 5000,
+      params: { _t: Date.now() }
+    })
+    if (response.data.overall === 'ready') {
+      systemReady.value = true
+      // 系统准备好后，停止检查
+      appRetryCount = 0
+      appRetryDelay = 5000
+      if (statusCheckInterval) {
+        clearTimeout(statusCheckInterval)
+        statusCheckInterval = null
+      }
+      return
+    } else {
+      // 如果系统未准备好，继续检查
+      statusCheckInterval = setTimeout(checkSystemStatus, appRetryDelay)
+    }
+  } catch (error: any) {
+    appRetryCount++
+    
+    // 静默处理连接错误，不在控制台输出
+    if (error.code === 'ECONNREFUSED' || 
+        error.message?.includes('ECONNREFUSED') || 
+        error.response?.status === 503) {
+      // 静默处理，使用指数退避
+      if (appRetryCount > 3) {
+        appRetryDelay = Math.min(appRetryDelay * 1.5, 15000) // 最大15秒
+      }
+    } else {
+      console.error('App系统状态检查失败:', error)
+      appRetryCount = 0
+      appRetryDelay = 5000
+    }
+    statusCheckInterval = setTimeout(checkSystemStatus, appRetryDelay)
+  }
+}
+
+// 监听路由变化，标记用户已导航
+watch(() => route.path, (newPath) => {
+  // 如果用户访问了具体页面（非根路径），标记为已导航
+  if (newPath !== '/' && !hasNavigated.value) {
+    hasNavigated.value = true
+  }
+}, { immediate: true })
+
 onMounted(() => {
+  // 检查系统状态
+  checkSystemStatus()
+  
   // 初始化用户状态
   userStore.initializeAuth()
+})
+
+// 组件卸载时清理定时器
+onUnmounted(() => {
+  if (statusCheckInterval) {
+    clearTimeout(statusCheckInterval)
+    statusCheckInterval = null
+  }
 })
 </script>
 

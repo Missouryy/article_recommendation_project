@@ -1,14 +1,14 @@
 <template>
   <div class="min-h-screen bg-gray-50 dark:bg-gray-900">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-8">
-      <button @click="$router.back()" class="mb-6 btn-secondary flex items-center gap-2 hover:bg-gray-300 dark:hover:bg-gray-500 transition-colors">
+      <button @click="goBack" class="mb-6 btn-secondary flex items-center gap-2 hover:bg-gray-300 dark:hover:bg-gray-500 transition-colors">
         <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/></svg>
         返回
       </button>
     </div>
     <div v-if="paper" class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-2">
       <!-- 论文标题和基本信息 -->
-      <div class="card p-8 mb-8 animate-scale-in">
+      <div class="card p-8 mb-8">
         <h1 class="text-3xl font-bold text-gray-900 dark:text-white mb-4">
           {{ paper.title }}
         </h1>
@@ -116,6 +116,14 @@
           <p v-else class="text-gray-500 dark:text-gray-400">暂无被引文献</p>
         </div>
       </div>
+      <!-- 引用关系图谱 -->
+      <div class="card p-6 mt-8 animate-slide-in">
+        <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">引用关系图谱</h3>
+        <p class="text-gray-600 dark:text-gray-400 text-sm mb-4">
+          可视化展示该论文的引用关系网络，包括参考文献、被引文献以及二级引用关系
+        </p>
+        <CitationGraph :paper-id="paper.id" />
+      </div>
     </div>
 
     <!-- 加载状态 -->
@@ -130,12 +138,14 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
-import type { Paper } from '@/types'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { api } from '@/services/api'
 import { useUserStore } from '@/stores/user'
+import CitationGraph from '@/components/CitationGraph.vue'
+import type { Paper } from '@/types'
 
 const route = useRoute()
+const router = useRouter()
 const userStore = useUserStore()
 
 const paper = ref<Paper | null>(null)
@@ -166,14 +176,17 @@ const fetchPaper = async () => {
       try {
         const bookmarksRes = await api.workspace.bookmarks({ limit: 1000 })
         const bookmarksList = Array.isArray(bookmarksRes.data) ? bookmarksRes.data : []
-        isBookmarked.value = paper.value ? bookmarksList.some(p => p.id === paper.value!.id) : false
+        isBookmarked.value = paper.value ? bookmarksList.some(p => 
+          p.id === paper.value!.id || 
+          (p.short_id && paper.value!.short_id && p.short_id === paper.value!.short_id)
+        ) : false
       } catch (e) {
         isBookmarked.value = false
       }
     } else {
       isBookmarked.value = false
     }
-
+    
     // 添加阅读记录
     if (userStore.isAuthenticated) {
       api.workspace.addReading(paperId)
@@ -192,15 +205,13 @@ const toggleBookmark = async () => {
   
   try {
     const paperId = route.params.id as string
-    
     if (isBookmarked.value) {
       await api.papers.unbookmark(paperId)
-      isBookmarked.value = false
     } else {
       await api.papers.bookmark(paperId)
-      isBookmarked.value = true
     }
-
+    // 操作后重新获取论文详情，确保所有状态同步
+    await fetchPaper()
   } catch (error) {
     console.error('收藏操作失败:', error)
   }
@@ -216,6 +227,16 @@ const generateSummary = async () => {
     console.error('生成总结失败:', error)
   } finally {
     summaryLoading.value = false
+  }
+}
+
+const goBack = () => {
+  // 优先使用浏览器历史记录返回
+  if (window.history.length > 1) {
+    router.back()
+  } else {
+    // 如果没有历史记录，返回到主页
+    router.push('/')
   }
 }
 

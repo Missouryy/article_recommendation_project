@@ -1,6 +1,6 @@
 export interface Paper {
   id: string
-  short_id: string
+  short_id?: string
   title: string
   author_names: string[]
   year?: number | string
@@ -13,7 +13,6 @@ export interface Paper {
 
 export interface Author {
   id: string
-  short_id: string
   name: string
   affiliation?: string
   h_index?: number

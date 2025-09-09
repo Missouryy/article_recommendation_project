@@ -81,37 +81,67 @@ Write-Host ""
 # --- 3. Start services ---
 Write-Host "Starting services..." -ForegroundColor Cyan
 
+# Get the current directory for absolute paths
+$currentDir = Get-Location
+Write-Host "Project root directory: $currentDir" -ForegroundColor Gray
+
+# Verify we're in the correct directory
+if (!(Test-Path "backend") -or !(Test-Path "frontend")) {
+    Write-Host "Error: Please run this script from the project root directory" -ForegroundColor Red
+    Write-Host "Expected directories: backend, frontend" -ForegroundColor Red
+    exit 1
+}
+
 # Start backend service (in new window)
 Write-Host "Starting FastAPI backend service..." -ForegroundColor Yellow
+
 $backendScript = @"
+# Change to project root directory
+Set-Location '$currentDir'
 # Activate virtual environment
 & './article_recommend/Scripts/Activate.ps1'
 # Enter backend directory
-Set-Location backend  # <-- CORRECT: Stay in the 'backend' folder
+Set-Location backend
 # Start service
 Write-Host 'FastAPI backend service starting...' -ForegroundColor Green
 Write-Host 'API URL: http://127.0.0.1:8000' -ForegroundColor Yellow
 Write-Host 'API Docs: http://127.0.0.1:8000/docs' -ForegroundColor Yellow
 Write-Host 'Press Ctrl+C to stop service' -ForegroundColor Gray
-uvicorn app.main:app --reload --host 127.0.0.1 --port 8000  # <-- CORRECT: Use 'app.main:app'
+python start_dev.py
 "@
+
+# Validate backend script before starting
+if ([string]::IsNullOrEmpty($backendScript)) {
+    Write-Host "Error: Backend script is empty" -ForegroundColor Red
+    exit 1
+}
 
 Start-Process powershell -ArgumentList "-NoExit", "-Command", $backendScript
 
 # Wait for backend to start
 Write-Host "Waiting for backend service to start..." -ForegroundColor Yellow
-Start-Sleep -Seconds 5
+Write-Host "This may take 10-15 seconds for first startup..." -ForegroundColor Yellow
+Start-Sleep -Seconds 10
 
 # Start frontend service
 Write-Host "Starting Vue frontend development server..." -ForegroundColor Yellow
-Set-Location frontend
 
 $frontendScript = @"
+# Change to project root directory
+Set-Location '$currentDir'
+# Change to frontend directory
+Set-Location frontend
 Write-Host 'Vue frontend development server starting...' -ForegroundColor Green
 Write-Host 'Frontend URL: http://localhost:5173' -ForegroundColor Yellow
 Write-Host 'Press Ctrl+C to stop service' -ForegroundColor Gray
 npm run dev
 "@
+
+# Validate frontend script before starting
+if ([string]::IsNullOrEmpty($frontendScript)) {
+    Write-Host "Error: Frontend script is empty" -ForegroundColor Red
+    exit 1
+}
 
 Start-Process powershell -ArgumentList "-NoExit", "-Command", $frontendScript
 

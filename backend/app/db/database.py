@@ -208,6 +208,38 @@ class RealDatabase:
         finally:
             await db.close()
     
+
+    async def get_paper_citations(self, paper_short_id: str) -> List[str]:
+        """获取引用该论文的论文ID列表"""
+        db = await self.connection.get_connection()
+        try:
+            query = """
+                SELECT from_short_id 
+                FROM relations 
+                WHERE to_short_id = ? AND relation_type = 'cited_by'
+            """
+            async with db.execute(query, (paper_short_id,)) as cursor:
+                rows = await cursor.fetchall()
+                return [row[0] for row in rows if row[0]]
+        finally:
+            await db.close()
+    
+    async def get_paper_references(self, paper_short_id: str) -> List[str]:
+        """获取论文引用的论文ID列表"""
+        db = await self.connection.get_connection()
+        try:
+            query = """
+                SELECT to_short_id 
+                FROM relations 
+                WHERE from_short_id = ? AND relation_type = 'references'
+            """
+            async with db.execute(query, (paper_short_id,)) as cursor:
+                rows = await cursor.fetchall()
+                return [row[0] for row in rows if row[0]]
+        finally:
+            await db.close()
+    
+
     async def get_paper_by_id(self, paper_id: str) -> Dict[str, Any] | None:
         """通过ID或short_id获取论文详情"""
         db = await self.connection.get_connection()
@@ -225,7 +257,13 @@ class RealDatabase:
                 async with db.execute(query, (paper_id,)) as cursor:
                     row = await cursor.fetchone()
                     if row:
-                        return self._format_paper_data(row)
+                        paper_data = self._format_paper_data(row)
+                        # 填充引用关系数据
+                        if paper_data:
+                            paper_data["cited_by"] = await self.get_paper_citations(paper_id)
+                            paper_data["references"] = await self.get_paper_references(paper_id)
+                        return paper_data
+
             else:
                 # 如果是完整ID，直接查询
                 query = """
@@ -233,13 +271,21 @@ class RealDatabase:
                            citation_count, download_count, url, reference_ids, cited_by, research_field, funding,
                            journal_issn, host_organization_name, author_orcids, author_institutions, author_countries,
                            fwci, citation_percentile, publication_date, primary_topic, topics, keywords_display, domain, crawl_timestamp
-                    FROM works 
-                    WHERE id = ?
+
+                FROM works 
+                WHERE id = ?
+
                 """
                 async with db.execute(query, (paper_id,)) as cursor:
                     row = await cursor.fetchone()
                     if row:
-                        return self._format_paper_data(row)
+                        paper_data = self._format_paper_data(row)
+                        # 填充引用关系数据
+                        if paper_data and paper_data.get("short_id"):
+                            paper_data["cited_by"] = await self.get_paper_citations(paper_data["short_id"])
+                            paper_data["references"] = await self.get_paper_references(paper_data["short_id"])
+                        return paper_data
+
             return None
         finally:
             await db.close()

@@ -1,7 +1,7 @@
 <template>
-  <div class="min-h-screen animate-fade-in">
+  <div class="min-h-screen">
     <!-- Hero Section -->
-     <section class="relative bg-blue-600 text-white">
+    <section class="relative bg-blue-600 text-white">
       <div class="absolute inset-0 bg-black opacity-20"></div>
       <div class="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-24">
         <div class="text-center">
@@ -50,7 +50,7 @@
     </section>
 
     <!-- 特色功能 -->
-    <section class="py-20 bg-white dark:bg-gray-900">
+  <section class="py-20 bg-white dark:bg-gray-900">
       <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div class="text-center mb-16">
           <h2 class="text-3xl md:text-4xl font-bold text-gray-900 dark:text-white mb-4">
@@ -62,8 +62,8 @@
         </div>
         
         <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
-          <div v-for="feature in features" :key="feature.title" class="card-hover p-6 text-center animate-scale-in">
-            <div class="w-16 h-16 mx-auto mb-4 bg-gradient-to-r from-primary-600 to-accent-600 rounded-full flex items-center justify-center shadow-soft">
+          <div v-for="feature in features" :key="feature.title" class="card-hover p-6 text-center">
+            <div class="w-16 h-16 mx-auto mb-4 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full flex items-center justify-center">
               <component :is="feature.icon" class="w-8 h-8 text-white" />
             </div>
             <h3 class="text-xl font-semibold text-gray-900 dark:text-white mb-2">
@@ -78,7 +78,7 @@
     </section>
 
     <!-- 统计数据 -->
-    <section class="py-16 bg-gray-50 dark:bg-gray-800">
+  <section class="py-16 bg-gray-50 dark:bg-gray-800">
       <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div class="grid grid-cols-2 md:grid-cols-4 gap-8 text-center">
           <div v-for="stat in stats" :key="stat.label" class="animate-fade-in">
@@ -94,7 +94,7 @@
     </section>
 
     <!-- 热门论文 -->
-    <section v-if="trendingPapers.length > 0" class="py-20 bg-white dark:bg-gray-900">
+  <section v-if="trendingPapers.length > 0" class="py-20 bg-white dark:bg-gray-900">
       <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div class="text-center mb-12">
           <h2 class="text-3xl font-bold text-gray-900 dark:text-white mb-4">
@@ -109,7 +109,7 @@
           <div
             v-for="paper in trendingPapers"
             :key="paper.id"
-            class="card-hover p-6 cursor-pointer animate-slide-in"
+            class="card-hover p-6 cursor-pointer"
             @click="$router.push(`/papers/${paper.short_id || paper.id}`)"
           >
             <h3 class="font-semibold text-gray-900 dark:text-white mb-2 line-clamp-2">
@@ -128,7 +128,7 @@
         </div>
         
         <div class="text-center mt-8 max-w-sm mx-auto">
-          <router-link to="/papers" class="btn bg-white text-blue-600 shadow-md hover:bg-gray-100 dark:bg-gray-800 dark:text-blue-400 dark:hover:bg-gray-700">
+          <router-link to="/papers" class="btn btn-lg bg-white text-blue-600 shadow-md hover:bg-gray-100 dark:bg-gray-800 dark:text-blue-400 dark:hover:bg-gray-700">
             查看更多论文
           </router-link>
         </div>

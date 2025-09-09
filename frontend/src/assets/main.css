@@ -1,3 +1,14 @@
+
+  .btn-lg {
+    font-size: 1.25rem;
+    padding: 0.9em 2.2em;
+    min-height: 3.2em;
+    border-radius: 2em;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    box-shadow: 0 6px 24px 0 rgba(60,60,120,0.12);
+  }
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -33,6 +44,18 @@
   定义可复用的 UI 组件，如卡片、按钮等。
 */
 @layer components {
+  :root {
+    --color-bg: 248 250 252; /* gray-50 */
+    --color-surface: 255 255 255; /* white */
+    --color-text: 17 24 39; /* gray-900 */
+    --color-muted: 107 114 128; /* gray-500 */
+    --color-primary: 37 99 235; /* blue-600 */
+    --color-accent: 6 182 212; /* cyan-500 */
+  }
+
+  .surface {
+    @apply bg-white/80 dark:bg-gray-800/80 backdrop-blur-md shadow-glass rounded-xl border border-gray-200/60 dark:border-gray-700/60;
+  }
   .card {
     @apply bg-white/80 dark:bg-gray-800/80 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 backdrop-blur-lg;
     box-shadow: 0 4px 24px 0 rgba(0,0,0,0.08);
@@ -84,7 +107,6 @@
     @apply inline-flex items-center px-3 py-1 rounded-full text-xs font-medium shadow-sm backdrop-blur;
     font-family: inherit;
   }
-
   .badge-primary { @apply badge bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200; }
   .badge-secondary { @apply badge bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200; }
   .badge-success { @apply badge bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200; }
@@ -102,6 +124,7 @@
   .graph-node {
     @apply cursor-pointer transition-transform duration-200 hover:opacity-80 hover:scale-105;
   }
+  }
 }
 
 /*
@@ -110,23 +133,25 @@
 */
 
 ::-webkit-scrollbar {
-  width: 15px;
+  width: 8px;
+  background: rgba(220,220,230,0.2);
+  border-radius: 8px;
 }
 
 ::-webkit-scrollbar-track {
-  background: transparent;
+  background: rgba(240,240,255,0.5);
+  border-radius: 8px;
 }
 
 ::-webkit-scrollbar-thumb {
-  background-color: rgba(156, 163, 175, 0.5);
-  border-radius: 20px;
-  border: 2px solid transparent;
-  background-clip: padding-box;
-  transition: background-color 0.2s ease;
+  background: linear-gradient(90deg, #e0e7ff 0%, #c7d2fe 100%);
+  border-radius: 8px;
+  border: 2px solid rgba(255,255,255,0.5);
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background-color: rgba(107, 114, 128, 0.7);
+  background: linear-gradient(90deg, #a5b4fc 0%, #818cf8 100%);
+}
 }
 
 .fade-enter-active,
@@ -139,6 +164,10 @@
   opacity: 0;
 }
 
+.slide-up-enter-active,
+.slide-up-leave-active {
+  transition: all 0.4s cubic-bezier(.4,0,.2,1);
+}
 .slide-up-enter-from {
   transform: scale(0.98) translateY(20px);
   opacity: 0;
@@ -149,6 +178,25 @@
   opacity: 0;
 }
 
+/* 图表样式 */
+.chart-container {
+  @apply relative w-full h-64 p-6 rounded-2xl shadow-lg backdrop-blur-lg;
+}
+
+/* 知识图谱样式 */
+.graph-container {
+  @apply relative w-full bg-white/80 dark:bg-gray-800/80 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-lg backdrop-blur-lg;
+}
+
+.graph-node {
+  @apply cursor-pointer transition-transform duration-200;
+}
+
+.graph-node:hover {
+  @apply opacity-80 scale-105;
+}
+
+/* 响应式工具类 */
 @media (max-width: 640px) {
   .mobile-hidden {
     @apply hidden;
@@ -156,5 +204,5 @@
 }
 
 * {
-  transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease;
+  transition: background-color 0.4s cubic-bezier(.4,0,.2,1), color 0.4s cubic-bezier(.4,0,.2,1), border-color 0.4s cubic-bezier(.4,0,.2,1), box-shadow 0.4s cubic-bezier(.4,0,.2,1);
 }
