@@ -5,7 +5,8 @@ import { useUserStore } from '@/stores/user'
 import type { TruthResponse } from '@/types'
 
 // API基础配置
-const API_BASE_URL = (import.meta as any).env?.VITE_API_BASE_URL || 'http://127.0.0.1:8000/api'
+// 默认使用相对路径，通过Vite代理到后端，避免开发环境的CORS问题
+const API_BASE_URL = (import.meta as any).env?.VITE_API_BASE_URL || '/api'
 
 
 // 创建axios实例

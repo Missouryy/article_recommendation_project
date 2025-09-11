@@ -67,11 +67,31 @@
       </div>
     </div>
 
-    <!-- 图谱容器 -->
-    <div 
-      ref="graphContainer" 
-      class="graph-container w-full h-96 bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700"
-    ></div>
+    <!-- 图谱容器（包裹层用于覆盖） -->
+    <div class="relative">
+      <div 
+        ref="graphContainer" 
+        class="graph-container w-full h-96 bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700"
+      ></div>
+
+      <!-- 高级加载进度覆盖层：半透明暗色背景 + 中央环形进度 -->
+      <div v-if="loading" class="absolute inset-0 z-10">
+        <div class="absolute inset-0 bg-black/50 backdrop-blur-[1px] rounded-lg"></div>
+        <div class="relative z-10 w-full h-full flex flex-col items-center justify-center select-none">
+          <div 
+            class="w-28 h-28 rounded-full shadow-inner"
+            :style="{ 
+              background: `conic-gradient(#3B82F6 ${Math.min(100, Math.max(0, loadProgress))*3.6}deg, rgba(255,255,255,0.15) ${Math.min(100, Math.max(0, loadProgress))*3.6}deg)`
+            }"
+          >
+            <div class="w-24 h-24 m-2 rounded-full bg-white/90 dark:bg-gray-800/90 flex items-center justify-center">
+              <div class="text-xl font-semibold text-gray-800 dark:text-gray-100">{{ Math.round(loadProgress) }}%</div>
+            </div>
+          </div>
+          <div class="mt-3 text-sm text-white/90">正在加载引用图谱...</div>
+        </div>
+      </div>
+    </div>
 
     <!-- 论文详情弹窗 -->
     <div 
@@ -86,7 +106,7 @@
         <div class="p-6">
           <div class="flex justify-between items-start mb-4">
             <h3 class="text-xl font-bold text-gray-900 dark:text-white">
-              {{ selectedPaper.title }}
+              {{ (selectedPaper as any)?.title || (selectedPaper as any)?.label || '未命名论文' }}
             </h3>
             <button 
               @click="closePaperDetail"
@@ -100,20 +120,20 @@
           
           <div class="space-y-3 text-sm text-gray-700 dark:text-gray-300">
             <div>
-              <span class="font-medium">作者:</span> {{ selectedPaper.authors.join(', ') }}
+              <span class="font-medium">作者:</span> {{ Array.isArray((selectedPaper as any)?.authors) ? (selectedPaper as any).authors.join(', ') : '' }}
             </div>
             <div>
-              <span class="font-medium">年份:</span> {{ selectedPaper.year }}
+              <span class="font-medium">年份:</span> {{ (selectedPaper as any)?.year ?? '' }}
             </div>
             <div>
-              <span class="font-medium">期刊:</span> {{ selectedPaper.journal }}
+              <span class="font-medium">期刊:</span> {{ (selectedPaper as any)?.journal ?? '' }}
             </div>
             <div>
-              <span class="font-medium">引用数:</span> {{ selectedPaper.citation_count }}
+              <span class="font-medium">引用数:</span> {{ (selectedPaper as any)?.citation_count ?? '' }}
             </div>
             <div>
               <span class="font-medium">摘要:</span>
-              <p class="mt-1 text-gray-600 dark:text-gray-400">{{ selectedPaper.abstract }}</p>
+              <p class="mt-1 text-gray-600 dark:text-gray-400">{{ (selectedPaper as any)?.abstract || '' }}</p>
             </div>
           </div>
         </div>
@@ -169,6 +189,8 @@ const graphDepth = ref(2)
 const maxNodes = ref(50)
 const currentLayout = ref('force')
 const selectedPaper = ref<GraphNode | null>(null)
+const loading = ref(false)
+const loadProgress = ref(0)
 
 // D3相关变量
 let svg: any = null
@@ -187,14 +209,57 @@ const updateGraph = async () => {
   if (!props.paperId) return
   
   try {
-    const response = await fetch(`/api/papers/citation-graph?paper_id=${props.paperId}&depth=${graphDepth.value}&max_nodes=${maxNodes.value}`)
-    const graphData: GraphData = await response.json()
-    
-    if (graphData.nodes && graphData.nodes.length > 0) {
-      renderGraph(graphData)
+    loading.value = true
+    loadProgress.value = 0
+    const targetDepth = Number(graphDepth.value)
+    const firstDepth = 1
+    // 阶段1：先拉取 depth=1，快速渲染
+    const res1 = await fetch(`/api/papers/citation-graph?paper_id=${props.paperId}&depth=${firstDepth}&max_nodes=${maxNodes.value}`)
+    const data1: GraphData = await res1.json()
+    let bestData: GraphData | null = null
+    let bestCount = 0
+    if (data1.nodes && data1.nodes.length > 0) {
+      bestData = data1
+      bestCount = data1.nodes.length
+      renderGraph(data1)
+    }
+    loadProgress.value = targetDepth > 1 ? 30 : 100
+
+    // 阶段2：轮询目标深度，直到节点数增长或超时
+    if (targetDepth > 1) {
+      const totalMs = 30000
+      const deadline = Date.now() + totalMs
+      while (Date.now() < deadline) {
+        try {
+          const res = await fetch(`/api/papers/citation-graph?paper_id=${props.paperId}&depth=${targetDepth}&max_nodes=${maxNodes.value}`)
+          const data: GraphData = await res.json()
+          const count = Array.isArray(data.nodes) ? data.nodes.length : 0
+          const elapsed = 1 - Math.max(0, deadline - Date.now()) / totalMs
+          loadProgress.value = Math.min(95, 30 + elapsed * 65)
+          // 总是以最新数据覆盖渲染（即便数量未增长，也可能内容已刷新）
+          bestData = data
+          bestCount = Math.max(bestCount, count)
+          renderGraph(data)
+        } catch (e) {
+          // 忽略临时失败，继续轮询
+        }
+        await new Promise(r => setTimeout(r, 800))
+      }
+      // 最后一轮保证显示最新数据并收尾
+      loadProgress.value = 100
+      if (bestData) {
+        renderGraph(bestData)
+      }
     }
   } catch (error) {
     console.error('获取引用图谱失败:', error)
+  }
+  finally {
+    // 收尾隐藏（确保不会卡在30%）
+    setTimeout(() => {
+      loading.value = false
+      loadProgress.value = 0
+    }, 300)
   }
 }
 
@@ -235,9 +300,10 @@ const renderGraph = (data: GraphData) => {
     weight: edge.weight
   }))
   
-  // 处理节点数据
+  // 处理节点数据：扁平化 metadata，避免模板读取字段时未定义
   const nodes = data.nodes.map(node => ({
     ...node,
+    ...(node as any).metadata,
     x: Math.random() * width,
     y: Math.random() * height
   }))
@@ -290,7 +356,7 @@ const renderGraph = (data: GraphData) => {
   
   // 添加节点标签
   node.append('text')
-    .text(d => d.label)
+    .text(d => truncateLabel(d.label, 10))
     .attr('text-anchor', 'middle')
     .attr('dy', d => d.size + 15)
     .attr('font-size', '10px')
@@ -332,6 +398,13 @@ const dragended = (event: any, d: any) => {
   if (!event.active) simulation.alphaTarget(0)
   d.fx = null
   d.fy = null
+}
+
+// 截断标签，避免过长显示
+const truncateLabel = (text: string, maxLen: number) => {
+  if (!text) return ''
+  if (text.length <= maxLen) return text
+  return text.slice(0, maxLen - 1) + '…'
 }
 
 // 显示论文详情

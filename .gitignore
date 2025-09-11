@@ -367,6 +367,7 @@ Temporary Items
 # =============================================================================
 
 *.db
+!truth_value_calculation/openalex_5000_v1_graded.db
 *.sqlite
 *.sqlite3
 *.db-journal
