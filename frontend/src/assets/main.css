@@ -124,7 +124,6 @@
   .graph-node {
     @apply cursor-pointer transition-transform duration-200 hover:opacity-80 hover:scale-105;
   }
-  }
 }
 
 /*
@@ -151,7 +150,6 @@
 
 ::-webkit-scrollbar-thumb:hover {
   background: linear-gradient(90deg, #a5b4fc 0%, #818cf8 100%);
-}
 }
 
 .fade-enter-active,

@@ -140,7 +140,9 @@ const fetchAuthor = async () => {
       try {
         const followedRes = await api.workspace.followedAuthors()
         const followedList = followedRes.data as Author[]
-        isFollowing.value = followedList.some(a => a.id === authorId)
+        // 将ID转换为姓名进行匹配
+        const authorName = authorId.replace(/_/g, ' ')
+        isFollowing.value = followedList.some(a => a.name === authorName)
       } catch (e) {
         // 忽略关注列表获取失败
         isFollowing.value = false
@@ -163,12 +165,14 @@ const toggleFollow = async () => {
   
   try {
     const authorId = decodeURIComponent(route.params.id as string)
+    // 将ID转换为作者姓名（将下划线替换为空格）
+    const authorName = authorId.replace(/_/g, ' ')
     
     if (isFollowing.value) {
-      await api.authors.unfollow(authorId)
+      await api.authors.unfollow(authorName)
       isFollowing.value = false
     } else {
-      await api.authors.follow(authorId)
+      await api.authors.follow(authorName)
       isFollowing.value = true
     }
   } catch (error) {

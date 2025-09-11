@@ -20,10 +20,10 @@ class DatabaseConfig:
 
         # 默认配置
         default_config = {
-            "database_path": str(self.project_root / "openalex_v3.db"),
-            "id_map_path": str(self.project_root / "id_map_v3.json"),
-            "index_path": str(self.project_root / "papers_v3.index"),
-            "description": "默认配置 - OpenAlex V3"
+            "database_path": str(self.project_root / "openalex_v1.db"),
+            "id_map_path": str(self.project_root / "id_map_v1.json"),
+            "index_path": str(self.project_root / "papers_v1.index"),
+            "description": "默认配置 - OpenAlex V1"
         }
 
 
@@ -45,7 +45,6 @@ class DatabaseConfig:
                             raise ValueError(f"配置文件缺少必要字段: {field}")
                     return
                 except json.JSONDecodeError:
-                    # 如果不是JSON，尝试作为旧格式处理（单行数据库名称）
                     if content in ["openalex_v1", "openalex_v3"]:
                         self._config = self._get_legacy_config(content)
                         return
@@ -74,7 +73,7 @@ class DatabaseConfig:
                 "description": "兼容模式 - OpenAlex V3"
             }
         }
-        return legacy_configs.get(db_name, legacy_configs["openalex_v3"])
+        return legacy_configs.get(db_name, legacy_configs["openalex_v1"])
     
     def get_database_path(self) -> Path:
         """获取数据库文件路径"""
