@@ -6,6 +6,12 @@
         返回
       </button>
     </div>
+    <!-- 错误提示 -->
+    <div v-if="errorMessage && !loading" class="max-w-3xl mx-auto mb-6 px-4">
+      <div class="bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-200 px-4 py-3 rounded">
+        {{ errorMessage }}
+      </div>
+    </div>
     <div v-if="paper" class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-2">
       <!-- 论文标题和基本信息 -->
       <div class="card p-8 mb-8">
@@ -156,10 +162,12 @@ const aiSummary = ref<{ content: string } | null>(null)
 const loading = ref(false)
 const summaryLoading = ref(false)
 const isBookmarked = ref(false)
+const errorMessage = ref<string | null>(null)
 
 const fetchPaper = async () => {
   try {
     loading.value = true
+    errorMessage.value = null
     const paperId = route.params.id as string
     
     const [paperRes, referencesRes, citationsRes] = await Promise.all([
@@ -193,8 +201,17 @@ const fetchPaper = async () => {
     if (userStore.isAuthenticated) {
       api.workspace.addReading(paperId)
     }
-  } catch (error) {
-    console.error('获取论文详情失败:', error)
+  } catch (error: any) {
+    // 处理论文不存在等错误
+    const status = error?.response?.status
+    if (status === 404) {
+      errorMessage.value = '该论文不在数据库收录中'
+    } else {
+      errorMessage.value = '获取论文详情失败，请稍后重试'
+    }
+    paper.value = null
+    references.value = []
+    citations.value = []
   } finally {
     loading.value = false
   }
