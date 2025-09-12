@@ -4,12 +4,136 @@
 from typing import Optional, List
 from fastapi import APIRouter, HTTPException, Depends, Query
 from ..models.paper import Paper, PaperSummary, GraphData, GraphNode, GraphEdge, TruthValueResult, CitationNetwork
+import logging
+import asyncio
+import json
+from collections import deque
+from urllib.request import urlopen
+from urllib.error import URLError, HTTPError
+
+logger = logging.getLogger(__name__)
 from ..models.user import User
 from ..api.auth import get_current_user
 from ..db.database import db, user_manager
 from ..algorithms.truth_value import calculate_truth_value, compare_papers_truth_value
 
 router = APIRouter(prefix="/papers", tags=["论文"])
+
+# 简易FIFO缓存（最多100条，不落库）
+_openalex_cache_max = 100
+_openalex_cache_order: deque[str] = deque()
+_openalex_cache_store: dict[str, dict] = {}
+
+def _cache_put(work_short_id: str, data: dict):
+    if work_short_id in _openalex_cache_store:
+        return
+    _openalex_cache_store[work_short_id] = data
+    _openalex_cache_order.append(work_short_id)
+    while len(_openalex_cache_order) > _openalex_cache_max:
+        evict = _openalex_cache_order.popleft()
+        _openalex_cache_store.pop(evict, None)
+
+def _cache_get(work_short_id: str) -> dict | None:
+    return _openalex_cache_store.get(work_short_id)
+
+def _short_id_from_any(pid: str) -> str:
+    if not pid:
+        return pid
+    if 'openalex.org/' in pid:
+        pid = pid.rstrip('/').split('/')[-1]
+    return pid
+
+def _join_abstract(inv_idx: dict | None) -> str:
+    if not inv_idx or not isinstance(inv_idx, dict):
+        return ''
+    # 将倒排摘要还原
+    words = sorted([(pos, w) for w, poses in inv_idx.items() for pos in poses], key=lambda x: x[0])
+    return ' '.join(w for _, w in words)
+
+def _map_openalex_to_paper(obj: dict) -> dict:
+    short_id = _short_id_from_any(obj.get('id', ''))
+    # 作者名
+    author_names = []
+    try:
+        for a in obj.get('authorships', []) or []:
+            for au in a.get('authors', []) or []:
+                name = au.get('display_name') or au.get('author', {}).get('display_name')
+                if name:
+                    author_names.append(name)
+    except Exception:
+        pass
+    # 参考文献
+    refs = obj.get('referenced_works') or []
+    refs_short = [_short_id_from_any(x) for x in refs if isinstance(x, str)]
+    host = (obj.get('host_venue') or {})
+    abstract_text = _join_abstract(obj.get('abstract_inverted_index'))
+    return {
+        "id": obj.get('id', short_id),
+        "short_id": short_id,
+        "title": obj.get('title', ''),
+        "authors": [],
+        "author_names": author_names,
+        "year": obj.get('publication_year') or obj.get('from_publication_date') or 0,
+        "journal": host.get('display_name') or '',
+        "journal_impact_factor": None,
+        "abstract": abstract_text,
+        "keywords": [],
+        "doi": obj.get('doi') or '',
+        "citation_count": obj.get('cited_by_count') or 0,
+        "download_count": 0,
+        "created_at": obj.get('publication_date') or '',
+        "url": obj.get('primary_location', {}).get('landing_page_url') or '',
+        "references": refs_short,
+        "cited_by": [],
+        "research_field": (obj.get('primary_topic') or {}).get('display_name') or '',
+        "funding": [],
+        "journal_issn": None,
+        "host_organization": None,
+        "fwci": None,
+        "citation_percentile": None,
+        "publication_date": obj.get('publication_date') or '',
+        "primary_topic": (obj.get('primary_topic') or {}).get('display_name'),
+        "topics": obj.get('topics') or [],
+        "keywords_display": None,
+        "domain": None,
+        "truth_value_score": None
+    }
+
+async def _fetch_openalex_work(short_or_full_id: str) -> dict | None:
+    sid = _short_id_from_any(short_or_full_id)
+    if not sid:
+        return None
+    cached = _cache_get(sid)
+    if cached:
+        return cached
+    url = f"https://api.openalex.org/works/{sid}"
+    try:
+        # 在线程中执行阻塞IO，避免阻塞事件循环
+        def _do_fetch(u: str):
+            with urlopen(u, timeout=8) as resp:
+                return json.loads(resp.read().decode('utf-8'))
+        obj = await asyncio.to_thread(_do_fetch, url)
+        mapped = _map_openalex_to_paper(obj)
+        _cache_put(sid, mapped)
+        return mapped
+    except (HTTPError, URLError, TimeoutError, ValueError):
+        return None
+
+async def _fetch_openalex_many(ids: list[str]) -> dict[str, dict]:
+    """并发抓取多个 OpenAlex works，返回 {short_id: mapped_obj}"""
+    ids = [_short_id_from_any(i) for i in ids if i]
+    results: dict[str, dict] = {}
+    # 限制并发，避免过多外连
+    sem = asyncio.Semaphore(16)
+
+    async def _task(i: str):
+        async with sem:
+            obj = await _fetch_openalex_work(i)
+            if obj:
+                results[_short_id_from_any(i)] = obj
+
+    await asyncio.gather(*[_task(i) for i in ids])
+    return results
 
 @router.get("/", response_model=List[PaperSummary], summary="获取论文列表")
 async def get_papers(
@@ -278,6 +402,10 @@ async def get_citation_graph(
     - **depth**: 引用关系深度，最大3层
     - **max_nodes**: 最大节点数量限制
     """
+    # 规范化 paper_id：兼容传入完整 OpenAlex URL 的情况
+    if isinstance(paper_id, str) and ('openalex.org/' in paper_id or paper_id.startswith('http')):
+        paper_id = paper_id.rstrip('/').split('/')[-1]
+
     if depth > 3:
         depth = 3
     
@@ -308,50 +436,52 @@ async def get_citation_graph(
     )
     nodes.append(center_node)
     processed_papers.add(paper_id)
-    
-    # 获取引用该论文的论文（被引用关系）
-    cited_by = paper.get("cited_by", [])
-    for i, cite_id in enumerate(cited_by[:max_nodes//2]):
-        if len(nodes) >= max_nodes:
-            break
-            
-        cite_paper = await db.get_paper_by_id(cite_id)
-        if cite_paper and cite_id not in processed_papers:
-            node = GraphNode(
-                id=cite_id,
-                label=cite_paper["title"][:50] + "..." if len(cite_paper["title"]) > 50 else cite_paper["title"],
-                type="paper",
-                size=15.0,
-                color="#10B981",  # 绿色
-                metadata={
-                    "title": cite_paper["title"],
-                    "authors": cite_paper["author_names"],
-                    "year": cite_paper["year"],
-                    "journal": cite_paper["journal"],
-                    "abstract": cite_paper["abstract"],
-                    "citation_count": cite_paper["citation_count"]
-                }
-            )
-            nodes.append(node)
-            processed_papers.add(cite_id)
-            
-            # 添加边：引用论文 -> 被引用论文
-            edge = GraphEdge(
-                source=cite_id,
-                target=paper_id,
-                type="citation",
-                weight=1.0,
-                metadata={"relationship": "cites"}
-            )
-            edges.append(edge)
+
+    # 不再构建被引关系：仅基于引用（references）方向构图
+    cited_by = []
+    logger.info("[citation-graph] cited_by disabled (relations table deprecated)")
     
     # 获取该论文引用的论文（参考文献关系）
     references = paper.get("references", [])
-    for i, ref_id in enumerate(references[:max_nodes//2]):
+    logger.info(f"[citation-graph] references_count={len(references)}")
+    if len(references) > 0:
+        logger.info(f"[citation-graph] references_sample={references[:5]}")
+    # 批量准备第一层引用论文，先查库，再一次性拉取缺失
+    # 先按最大可用容量裁剪第一层ID，避免过量抓取
+    first_level_ids = references[:max_nodes//2]
+    remaining_capacity = max(0, max_nodes - len(nodes))
+    if remaining_capacity < len(first_level_ids):
+        first_level_ids = first_level_ids[:remaining_capacity]
+
+    db_ref_papers: dict[str, dict] = {}
+    missing_ref_ids: list[str] = []
+    for ref_id in first_level_ids:
+        ref_p = await db.get_paper_by_id(ref_id)
+        if ref_p:
+            db_ref_papers[ref_id] = ref_p
+        else:
+            missing_ref_ids.append(ref_id)
+    # 仅为剩余可用容量准备缺失抓取数量，减少不必要的远程请求
+    fetched_ref_map: dict[str, dict] = {}
+    if missing_ref_ids:
+        remaining_after_db = max(0, remaining_capacity - len(db_ref_papers))
+        if remaining_after_db > 0:
+            missing_ref_ids = missing_ref_ids[:remaining_after_db]
+        logger.info(f"[citation-graph] batch fetching missing first-level refs count={len(missing_ref_ids)}")
+        # 批量异步抓取
+        fetched_ref_map = await _fetch_openalex_many(missing_ref_ids)
+
+    for i, ref_id in enumerate(first_level_ids):
         if len(nodes) >= max_nodes:
+            logger.info("[citation-graph] stop adding references: reached max_nodes")
             break
-            
-        ref_paper = await db.get_paper_by_id(ref_id)
+        ref_paper = db_ref_papers.get(ref_id) or fetched_ref_map.get(ref_id)
+        if not ref_paper:
+            logger.info(f"[citation-graph] reference still missing ref_id={ref_id}")
+            continue
+        if ref_id in processed_papers:
+            logger.info(f"[citation-graph] reference skip duplicate ref_id={ref_id}")
+            continue
         if ref_paper and ref_id not in processed_papers:
             node = GraphNode(
                 id=ref_id,
@@ -370,6 +500,7 @@ async def get_citation_graph(
             )
             nodes.append(node)
             processed_papers.add(ref_id)
+            logger.info(f"[citation-graph] reference add ref_id={ref_id} nodes={len(nodes)}")
             
             # 添加边：论文 -> 参考文献
             edge = GraphEdge(
@@ -381,53 +512,86 @@ async def get_citation_graph(
             )
             edges.append(edge)
     
-    # 如果深度允许，添加二级关系
+    # 如果深度允许，添加二级关系（仅沿 references 扩展）
     if depth >= 2 and len(nodes) < max_nodes:
-        # 获取二级引用关系
-        for cite_id in cited_by[:10]:  # 限制数量
+        logger.info("[citation-graph] processing depth=2 (expand via references only)")
+        # 从第一层的参考文献向外扩展：扩它们的参考文献（引用链）
+        for ref_id in references[:10]:  # 限制数量
             if len(nodes) >= max_nodes:
                 break
-                
-            cite_paper = await db.get_paper_by_id(cite_id)
-            if not cite_paper:
+            ref_paper = await db.get_paper_by_id(ref_id) or _openalex_cache_store.get(_short_id_from_any(ref_id))
+            if not ref_paper:
+                logger.info(f"[citation-graph] depth2 skip: first-level ref_id={ref_id} not found in DB/cache")
                 continue
-                
-            # 获取引用该论文的论文
-            second_level_cites = cite_paper.get("cited_by", [])
-            for second_id in second_level_cites[:5]:  # 限制数量
-                if len(nodes) >= max_nodes or second_id in processed_papers:
+            second_from_refs = ref_paper.get("references", [])
+            logger.info(f"[citation-graph] depth2 from references ref_id={ref_id} second_refs_count={len(second_from_refs)} sample={second_from_refs[:5]}")
+            # 批量查询二级引用：先查库，再一次性抓取缺失，按剩余容量裁剪
+            remaining_capacity = max(0, max_nodes - len(nodes))
+            slice_limit = min(5, remaining_capacity)
+            if slice_limit <= 0:
+                break
+            candidate_second = second_from_refs[:slice_limit]
+            db_second_map: dict[str, dict] = {}
+            missing_second_ids: list[str] = []
+            for second_id in candidate_second:
+                if second_id in processed_papers:
                     continue
-                    
-                second_paper = await db.get_paper_by_id(second_id)
-                if second_paper:
-                    node = GraphNode(
-                        id=second_id,
-                        label=second_paper["title"][:40] + "..." if len(second_paper["title"]) > 40 else second_paper["title"],
-                        type="paper",
-                        size=12.0,
-                        color="#8B5CF6",  # 紫色
-                        metadata={
-                            "title": second_paper["title"],
-                            "authors": second_paper["author_names"],
-                            "year": second_paper["year"],
-                            "journal": second_paper["journal"],
-                            "abstract": second_paper["abstract"],
-                            "citation_count": second_paper["citation_count"]
-                        }
-                    )
-                    nodes.append(node)
-                    processed_papers.add(second_id)
-                    
-                    # 添加边
-                    edge = GraphEdge(
-                        source=second_id,
-                        target=cite_id,
-                        type="citation",
-                        weight=0.8,
-                        metadata={"relationship": "cites", "level": 2}
-                    )
-                    edges.append(edge)
-    
+                sp = await db.get_paper_by_id(second_id)
+                if sp:
+                    db_second_map[second_id] = sp
+                else:
+                    missing_second_ids.append(second_id)
+            fetched_second_map: dict[str, dict] = {}
+            if missing_second_ids:
+                remaining_after_db = max(0, slice_limit - len(db_second_map))
+                if remaining_after_db > 0:
+                    missing_second_ids = missing_second_ids[:remaining_after_db]
+                    fetched_second_map = await _fetch_openalex_many(missing_second_ids)
+
+            for second_id in candidate_second:  # 限制数量
+                if len(nodes) >= max_nodes:
+                    logger.info("[citation-graph] depth2 stop (from refs): reached max_nodes")
+                    break
+                if second_id in processed_papers:
+                    logger.info(f"[citation-graph] depth2 skip duplicate (from refs) second_id={second_id}")
+                    continue
+                second_paper = db_second_map.get(second_id) or fetched_second_map.get(second_id)
+                if not second_paper:
+                    logger.info(f"[citation-graph] depth2 still missing second_id={second_id}")
+                    continue
+                node = GraphNode(
+                    id=second_id,
+                    label=second_paper["title"][:40] + "..." if len(second_paper["title"]) > 40 else second_paper["title"],
+                    type="paper",
+                    size=12.0,
+                    color="#8B5CF6",  # 紫色
+                    metadata={
+                        "title": second_paper["title"],
+                        "authors": second_paper["author_names"],
+                        "year": second_paper["year"],
+                        "journal": second_paper["journal"],
+                        "abstract": second_paper["abstract"],
+                        "citation_count": second_paper["citation_count"]
+                    }
+                )
+                nodes.append(node)
+                processed_papers.add(second_id)
+                logger.info(f"[citation-graph] depth2 add (from refs->refs) second_id={second_id} nodes={len(nodes)}")
+                
+                # 二级边：ref_id -> second_id（引用链）
+                edges.append(GraphEdge(
+                    source=ref_id,
+                    target=second_id,
+                    type="citation",
+                    weight=0.8,
+                    metadata={"relationship": "references", "level": 2}
+                ))
+
+        logger.info(f"[citation-graph] after depth=2 nodes={len(nodes)} edges={len(edges)}")
+
+    if depth >= 3:
+        logger.info("[citation-graph] depth=3 requested, third-level expansion not implemented; graph will match depth=2")
+    logger.info(f"[citation-graph] done nodes={len(nodes)} edges={len(edges)} center={paper_id}")
     return GraphData(
         nodes=nodes,
         edges=edges,

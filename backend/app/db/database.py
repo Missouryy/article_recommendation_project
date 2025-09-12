@@ -220,7 +220,7 @@ class RealDatabase:
             """
             async with db.execute(query, (paper_short_id,)) as cursor:
                 rows = await cursor.fetchall()
-                return [row[0] for row in rows if row[0]]
+                return [row[0] for row in rows if row and row[0]]
         finally:
             await db.close()
     
@@ -228,14 +228,41 @@ class RealDatabase:
         """获取论文引用的论文ID列表"""
         db = await self.connection.get_connection()
         try:
+            # 直接从 works 表读取 reference_ids（JSON 数组）
             query = """
-                SELECT to_short_id 
-                FROM relations 
-                WHERE from_short_id = ? AND relation_type = 'references'
+                SELECT reference_ids 
+                FROM works 
+                WHERE short_id = ?
             """
             async with db.execute(query, (paper_short_id,)) as cursor:
-                rows = await cursor.fetchall()
-                return [row[0] for row in rows if row[0]]
+                row = await cursor.fetchone()
+                if not row or row[0] is None:
+                    return []
+                try:
+                    data = json.loads(row[0]) if isinstance(row[0], str) else row[0]
+                    # 规范化为字符串列表
+                    if isinstance(data, list):
+                        result = []
+                        def to_short_id(value: str) -> str:
+                            # 将可能的完整 OpenAlex URL 规范化为短ID，例如
+                            # https://openalex.org/W123 -> W123
+                            if isinstance(value, str) and ('openalex.org/' in value or value.startswith('http')):
+                                return value.rstrip('/').split('/')[-1]
+                            return value
+                        for item in data:
+                            if isinstance(item, str):
+                                result.append(to_short_id(item))
+                            elif isinstance(item, dict):
+                                # 兼容可能的对象结构，尝试读取常见键
+                                for key in ("short_id", "id", "to_short_id"):
+                                    val = item.get(key)
+                                    if isinstance(val, str):
+                                        result.append(to_short_id(val))
+                                        break
+                        return result
+                    return []
+                except (json.JSONDecodeError, TypeError):
+                    return []
         finally:
             await db.close()
     
@@ -244,6 +271,9 @@ class RealDatabase:
         """通过ID或short_id获取论文详情"""
         db = await self.connection.get_connection()
         try:
+            # 兼容传入完整OpenAlex URL的情况，提取末段ID
+            if isinstance(paper_id, str) and ('openalex.org/' in paper_id or paper_id.startswith('http')):
+                paper_id = paper_id.rstrip('/').split('/')[-1]
             # 如果是short_id格式（如W2963095307），转换为完整ID查询
             if paper_id.startswith('W') and len(paper_id) <= 15:
                 query = """
@@ -260,7 +290,8 @@ class RealDatabase:
                         paper_data = self._format_paper_data(row)
                         # 填充引用关系数据
                         if paper_data:
-                            paper_data["cited_by"] = await self.get_paper_citations(paper_id)
+                            # relations 表已废弃：不再使用被引关系
+                            paper_data["cited_by"] = []
                             paper_data["references"] = await self.get_paper_references(paper_id)
                         return paper_data
 
@@ -282,7 +313,8 @@ class RealDatabase:
                         paper_data = self._format_paper_data(row)
                         # 填充引用关系数据
                         if paper_data and paper_data.get("short_id"):
-                            paper_data["cited_by"] = await self.get_paper_citations(paper_data["short_id"])
+                            # relations 表已废弃：不再使用被引关系
+                            paper_data["cited_by"] = []
                             paper_data["references"] = await self.get_paper_references(paper_data["short_id"])
                         return paper_data
 

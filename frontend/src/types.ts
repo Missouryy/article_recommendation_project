@@ -26,3 +26,14 @@ export interface Recommendation {
   paper: Paper;
   reason: string;
 }
+
+export interface TruthPaper extends Paper {
+  truth_value: number;           // 0-1
+  truth_value_percent: number;   // 0-100（后端已算好，一位小数）
+  truth_value_text: string;      // "xx.x分"
+}
+
+export interface TruthResponse {
+  items: TruthPaper[];
+  total: number;
+}
