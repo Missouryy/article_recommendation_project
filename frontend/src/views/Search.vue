@@ -122,15 +122,21 @@
           </div>
         </template>
         <template v-else-if="error">
-          <div class="text-center py-12">
-            <div class="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-6 max-w-md mx-auto">
-              <p class="text-red-600 dark:text-red-400 mb-4">{{ error }}</p>
-              <button 
-                @click="handleSearch()"
-                class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors"
-              >
-                重试搜索
-              </button>
+          <div class="bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-md p-4 mb-6 max-w-2xl mx-auto">
+            <div class="flex">
+              <svg class="h-5 w-5 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M4.93 4.93l14.14 14.14M12 2a10 10 0 100 20 10 10 0 000-20z" />
+              </svg>
+              <div class="ml-3">
+                <h3 class="text-sm font-medium text-red-800 dark:text-red-200">搜索失败</h3>
+                <p class="mt-1 text-sm text-red-700 dark:text-red-300">{{ error }}</p>
+                <button 
+                  @click="handleSearch()"
+                  class="mt-2 text-sm font-medium text-red-600 dark:text-red-400 hover:text-red-500"
+                >
+                  重试
+                </button>
+              </div>
             </div>
           </div>
         </template>

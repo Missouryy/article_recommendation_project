@@ -2,6 +2,9 @@
 搜索API接口
 """
 import time
+import os
+import sqlite3
+from pathlib import Path
 from typing import Optional, List, Dict, Any
 from fastapi import APIRouter, Query, Depends, HTTPException
 from ..models.paper import SearchRequest, SearchResponse, PaperSummary, SearchFilters
@@ -109,6 +112,12 @@ async def search_papers(search_request: SearchRequest, current_user: Optional[Us
             filters=search_request.filters
         )
     
+    # 为结果补充真值分数（用于真值展示与排序）
+    try:
+        _enrich_truth_scores(sorted_results := results)  # 先声明变量以便日志与后续处理
+    except Exception as e:
+        print(f"[VectorSearch][API] enrich truth scores failed: {e}")
+
     # 应用排序
     sorted_results = apply_sorting(
         results=results,
@@ -148,8 +157,8 @@ async def search_papers(search_request: SearchRequest, current_user: Optional[Us
         if not isinstance(r.get('research_field'), str):
             r['research_field'] = str(r.get('research_field') or '')
     
-    # 如果用户已登录，应用个性化重排序
-    if current_user:
+    # 如果用户已登录，且当前为相关度排序，才应用个性化重排序（避免覆盖用户选择的排序）
+    if current_user and (search_request.sort_by or "relevance") == "relevance":
         user_data = await user_manager.get_user_by_id(current_user.id)
         if user_data:
             print(f"[VectorSearch][API] start rerank for user={current_user.id}")
@@ -159,6 +168,9 @@ async def search_papers(search_request: SearchRequest, current_user: Optional[Us
                 user_data=user_data
             )
             print(f"[VectorSearch][API] rerank done count={len(sorted_results)}")
+            # 尊重前端 sort_order：个性化重排默认降序，如为升序则反转
+            if (search_request.sort_order or "desc") == "asc":
+                sorted_results = list(reversed(sorted_results))
             
             # 记录搜索历史
             await user_manager.add_search_history(current_user.id, search_request.query)
@@ -527,3 +539,89 @@ def apply_sorting(results: List[Dict[str, Any]], sort_by: str = "relevance", sor
         return sorted(results, key=lambda x: x.get("truth_value_score", 0), reverse=reverse)
     else:  # relevance
         return sorted(results, key=lambda x: x.get("relevance_score", 0), reverse=reverse)
+
+def _resolve_truth_db_path() -> Optional[str]:
+    """尽量寻找真值SQLite路径；找不到时返回None，不抛错。"""
+    try:
+        env_path = os.getenv("TRUTH_DB_PATH")
+        if env_path and os.path.exists(env_path):
+            return env_path
+        here = Path(__file__).resolve()
+        candidates: List[Path] = []
+        try:
+            candidates.append(here.parents[3] / "truth_value_calculation" / "forged_output_merged_v2.db")
+            candidates.append(here.parents[3] / "truth_value_calculation" / "data" / "forged_output_merged_v2.db")
+        except Exception:
+            pass
+        candidates.append(Path.cwd() / "truth_value_calculation" / "forged_output_merged_v2.db")
+        candidates.append(Path.cwd() / "truth_value_calculation" / "data" / "forged_output_merged_v2.db")
+        for p in candidates:
+            try:
+                if p.exists():
+                    return str(p)
+            except Exception:
+                continue
+        return None
+    except Exception:
+        return None
+
+def _enrich_truth_scores(results: List[Dict[str, Any]]):
+    """为结果补充 truth_value_score（0-100）。若找不到真值库或查询异常则静默跳过，不进行任何估算。"""
+    if not results:
+        return
+    db_path = _resolve_truth_db_path()
+    if not db_path or not os.path.exists(db_path):
+        return
+    try:
+        # 收集 short_id 列表
+        sids: List[str] = []
+        for r in results:
+            sid = r.get("short_id")
+            # 尝试从 id 提取短ID（如 'https://openalex.org/W123' -> 'W123'）
+            if not sid:
+                rid = r.get("id") or r.get("paper_id")
+                if isinstance(rid, str) and ("openalex.org/" in rid or rid.startswith("http")):
+                    sid = rid.rstrip("/").split("/")[-1]
+            if isinstance(sid, str) and sid:
+                sids.append(sid)
+        # 去重并限制一次查询规模
+        sids = list(dict.fromkeys(sids))
+        if not sids:
+            return
+
+        conn = sqlite3.connect(db_path)
+        try:
+            conn.row_factory = sqlite3.Row
+            cur = conn.cursor()
+            # 真值表名
+            table = "truth_agg_results"
+            # 构造 IN 查询
+            placeholders = ",".join(["?"] * len(sids))
+            sql = f"SELECT short_id, truth_score_pct FROM {table} WHERE short_id IN ({placeholders})"
+            cur.execute(sql, sids)
+            rows = cur.fetchall()
+            sid_to_score100 = {}
+            for row in rows or []:
+                try:
+                    pct = float(row["truth_score_pct"]) if row["truth_score_pct"] is not None else None
+                    if pct is not None:
+                        sid_to_score100[str(row["short_id"])]= round(pct, 1)  # 0-100 量纲
+                except Exception:
+                    continue
+            # 写回已有真值
+            for r in results:
+                sid = r.get("short_id")
+                if not sid and isinstance(r.get("id"), str):
+                    rid = r.get("id")
+                    if "openalex.org/" in rid or rid.startswith("http"):
+                        sid = rid.rstrip("/").split("/")[-1]
+                if sid and sid in sid_to_score100:
+                    r["truth_value_score"] = sid_to_score100[sid]
+        finally:
+            try:
+                conn.close()
+            except Exception:
+                pass
+    except Exception:
+        # 静默失败
+        return
