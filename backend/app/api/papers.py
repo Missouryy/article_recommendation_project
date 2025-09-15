@@ -24,6 +24,10 @@ _openalex_cache_max = 100
 _openalex_cache_order: deque[str] = deque()
 _openalex_cache_store: dict[str, dict] = {}
 
+# 引用图谱缓存（避免重复计算）
+_citation_graph_cache: dict[str, dict] = {}
+_citation_graph_cache_max = 50
+
 def _cache_put(work_short_id: str, data: dict):
     if work_short_id in _openalex_cache_store:
         return
@@ -35,6 +39,23 @@ def _cache_put(work_short_id: str, data: dict):
 
 def _cache_get(work_short_id: str) -> dict | None:
     return _openalex_cache_store.get(work_short_id)
+
+def _citation_cache_key(paper_id: str, depth: int, max_nodes: int) -> str:
+    """生成引用图谱缓存键"""
+    return f"{paper_id}:{depth}:{max_nodes}"
+
+def _citation_cache_put(key: str, data: dict):
+    """存储引用图谱缓存"""
+    _citation_graph_cache[key] = data
+    # 简单的LRU清理
+    if len(_citation_graph_cache) > _citation_graph_cache_max:
+        # 删除最旧的缓存项
+        oldest_key = next(iter(_citation_graph_cache))
+        _citation_graph_cache.pop(oldest_key, None)
+
+def _citation_cache_get(key: str) -> dict | None:
+    """获取引用图谱缓存"""
+    return _citation_graph_cache.get(key)
 
 def _short_id_from_any(pid: str) -> str:
     if not pid:
@@ -110,7 +131,7 @@ async def _fetch_openalex_work(short_or_full_id: str) -> dict | None:
     try:
         # 在线程中执行阻塞IO，避免阻塞事件循环
         def _do_fetch(u: str):
-            with urlopen(u, timeout=8) as resp:
+            with urlopen(u, timeout=5) as resp:  # 减少超时时间到5秒
                 return json.loads(resp.read().decode('utf-8'))
         obj = await asyncio.to_thread(_do_fetch, url)
         mapped = _map_openalex_to_paper(obj)
@@ -123,8 +144,8 @@ async def _fetch_openalex_many(ids: list[str]) -> dict[str, dict]:
     """并发抓取多个 OpenAlex works，返回 {short_id: mapped_obj}"""
     ids = [_short_id_from_any(i) for i in ids if i]
     results: dict[str, dict] = {}
-    # 限制并发，避免过多外连
-    sem = asyncio.Semaphore(16)
+    # 提高并发数到32，匹配用户设置
+    sem = asyncio.Semaphore(32)
 
     async def _task(i: str):
         async with sem:
@@ -393,7 +414,7 @@ async def get_citation_network(paper_id: str = Query(..., description="论文ID"
 async def get_citation_graph(
     paper_id: str = Query(..., description="论文ID"),
     depth: int = Query(2, description="引用关系深度，最大3层"),
-    max_nodes: int = Query(50, description="最大节点数量")
+    max_nodes: int = Query(30, description="最大节点数量")
 ):
     """
     获取论文的引用关系图谱数据
@@ -408,6 +429,13 @@ async def get_citation_graph(
 
     if depth > 3:
         depth = 3
+    
+    # 检查缓存
+    cache_key = _citation_cache_key(paper_id, depth, max_nodes)
+    cached_result = _citation_cache_get(cache_key)
+    if cached_result:
+        logger.info(f"[citation-graph] 使用缓存结果 paper_id={paper_id} depth={depth} max_nodes={max_nodes}")
+        return GraphData(**cached_result)
     
     paper = await db.get_paper_by_id(paper_id)
     if not paper:
@@ -592,10 +620,17 @@ async def get_citation_graph(
     if depth >= 3:
         logger.info("[citation-graph] depth=3 requested, third-level expansion not implemented; graph will match depth=2")
     logger.info(f"[citation-graph] done nodes={len(nodes)} edges={len(edges)} center={paper_id}")
-    return GraphData(
+    
+    # 构建返回结果
+    result = GraphData(
         nodes=nodes,
         edges=edges,
         center_node=paper_id,
         layout="force"
     )
+    
+    # 缓存结果
+    _citation_cache_put(cache_key, result.dict())
+    
+    return result
 

@@ -121,6 +121,19 @@
             </div>
           </div>
         </template>
+        <template v-else-if="error">
+          <div class="text-center py-12">
+            <div class="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-6 max-w-md mx-auto">
+              <p class="text-red-600 dark:text-red-400 mb-4">{{ error }}</p>
+              <button 
+                @click="handleSearch()"
+                class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors"
+              >
+                重试搜索
+              </button>
+            </div>
+          </div>
+        </template>
         <template v-else-if="searched && !loading && searchResults.length === 0">
           <div class="text-center py-16">
             <p class="text-gray-500 dark:text-gray-400 text-xl font-medium">未找到相关论文，请尝试其他关键词</p>
@@ -136,23 +149,30 @@ defineOptions({ name: 'Search' })
 import { ref, onMounted, onActivated, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { api } from '@/services/api'
-import type { Paper } from '@/types'
-import CitationGraph from '@/components/CitationGraph.vue'
+type SearchItem = {
+  id: string
+  short_id?: string
+  title: string
+  author_names: string[]
+  year: number
+  journal: string
+  citation_count: number
+  truth_value_score?: number
+}
 
 const route = useRoute()
 const router = useRouter()
 const searchQuery = ref('')
-const searchResults = ref<Paper[]>([])
+const searchResults = ref<SearchItem[]>([])
 const totalResults = ref(0)
 const loading = ref(false)
+const error = ref('')
 const searched = ref(false)
 const pageSize = ref(20)
 const currentPage = ref(1)
 const totalPages = computed(() => Math.max(1, Math.ceil(totalResults.value / pageSize.value)))
 const sortBy = ref<'relevance' | 'date' | 'citation' | 'truth_value'>('relevance')
 const sortOrder = ref<'asc' | 'desc'>('desc')
-const activeView = ref('list')
-const selectedPaperForGraph = ref(null)
 
 let lastScrollTop = 0
 
@@ -186,25 +206,37 @@ const handleSearch = async (resetPage = false) => {
   searched.value = true
   try {
     loading.value = true
+    error.value = ''
     const response = await api.search.papers({
       query: searchQuery.value,
-      search_type: 'hybrid',
-      limit: pageSize.value,
-      offset: (currentPage.value - 1) * pageSize.value,
-      sort_by: sortBy.value,
-      sort_order: sortOrder.value,
+      search_type: 'vector',
+      limit: 20
     })
-
-    searchResults.value = response.data.papers
-    totalResults.value = response.data.total
+    const papers = Array.isArray(response.data?.papers) ? response.data.papers : []
+    const total = typeof response.data?.total === 'number' ? response.data.total : papers.length
+    searchResults.value = papers.map((p: any) => ({
+      id: p.id || p.paper_id,
+      short_id: p.short_id || '',
+      title: p.title || '',
+      author_names: Array.isArray(p.author_names) ? p.author_names : [],
+      year: p.year || 0,
+      journal: p.journal || '',
+      citation_count: p.citation_count || 0,
+      truth_value_score: p.truth_value_score
+    }))
+    totalResults.value = total
     updateRouteQuery()
-    
-    // 如果有搜索结果，默认选择第一篇论文用于图谱显示
-    if (response.data.papers.length > 0) {
-      selectedPaperForGraph.value = response.data.papers[0]
+  } catch (err: any) {
+    console.error('搜索失败:', err)
+    searchResults.value = []
+    totalResults.value = 0
+    if (err.response?.status === 500) {
+      error.value = '系统正在加载中，请稍后重试'
+    } else if (err.message?.includes('timeout')) {
+      error.value = '搜索超时，请稍后重试'
+    } else {
+      error.value = '搜索失败，请稍后重试'
     }
-  } catch (error) {
-    console.error('搜索失败:', error)
   } finally {
     loading.value = false
   }
@@ -221,17 +253,6 @@ const prevPage = async () => {
   currentPage.value -= 1
   await handleSearch(false)
 }
-
-const selectPaper = (paper: any) => {
-  if (activeView.value === 'list') {
-    // 在列表视图中点击论文，跳转到详情页
-    window.open(`/papers/${paper.short_id || paper.id}`, '_blank')
-  } else {
-    // 在图谱视图中点击论文，更新图谱
-    selectedPaperForGraph.value = paper
-  }
-}
-
 
 onMounted(() => {
   const q = route.query.q as string

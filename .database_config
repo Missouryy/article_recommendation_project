@@ -1,6 +1,6 @@
 {
-  "database_path": "/Users/yanyu/Desktop/article_recommendation_project/openalex_v1.db",
-  "id_map_path": "/Users/yanyu/Desktop/article_recommendation_project/id_map_v1.json",
-  "index_path": "/Users/yanyu/Desktop/article_recommendation_project/papers_v1.index",
-  "description": "macOS配置 - OpenAlex V1"
+  "database_path": "F:\\article_recommendation_project\\data\\openalex_v1.db",
+  "id_map_path": "F:\\article_recommendation_project\\data_revision\\id_map_v1_r.json",
+  "index_path": "F:\\article_recommendation_project\\data_revision\\papers_v1_r.index",
+  "description": "默认配置示例 - OpenAlex V1"
 }

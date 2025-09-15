@@ -52,6 +52,7 @@
             </div>
             <span class="text-xs text-gray-500 dark:text-gray-400">{{ statusTexts.bert_model }}</span>
           </div>
+          
         </div>
 
         <!-- 加载提示 -->
@@ -169,13 +170,27 @@ const estimatedTime = computed(() => {
 
 // 重试计数器和延迟控制
 const retryCount = ref(0)
-const retryDelay = ref(3000) // 初始3秒
-const maxRetryDelay = ref(15000) // 最大15秒
+const retryDelay = ref(2000) // 初始2秒
+const maxRetryDelay = ref(10000) // 最大10秒
 const backendStartupDetected = ref(false)
 const consecutiveErrors = ref(0) // 连续错误计数
+const isChecking = ref(false) // 防止重复检查
+const debugMode = ref(false) // 调试模式，可以通过URL参数控制
 
 const checkStatus = async () => {
+  // 防止重复检查
+  if (isChecking.value) {
+    if (debugMode.value) console.log('🔍 状态检查已在进行中，跳过重复请求')
+    return
+  }
+  
+  isChecking.value = true
+  
   try {
+    if (debugMode.value) {
+      console.log(`🔍 开始检查系统状态 (第${retryCount.value + 1}次尝试，延迟${retryDelay.value}ms)`)
+    }
+    
     const response = await axios.get('/api/system/status', {
       timeout: 5000, // 5秒超时
       // 添加时间戳避免缓存
@@ -183,11 +198,18 @@ const checkStatus = async () => {
     })
     const data = response.data
     
+    if (debugMode.value) {
+      console.log('✅ 后端连接成功，系统状态:', data)
+    }
+    
     // 后端连接成功，重置重试参数
     retryCount.value = 0
-    retryDelay.value = 3000
+    retryDelay.value = 2000
     backendStartupDetected.value = true
     consecutiveErrors.value = 0
+    
+    // 重置检查状态，允许后续检查
+    isChecking.value = false
     
     // 更新系统状态 - 从API响应的components字段中获取
     systemStatus.value = {
@@ -211,20 +233,53 @@ const checkStatus = async () => {
     // 如果全部加载完成，跳转到主页（仅在初始加载时）
     if (systemStatus.value.overall === 'ready') {
       progress.value = 100
-      // 只有在根路径或特定加载页面时才跳转，避免在论文详情等页面时跳转
-      const currentPath = window.location.pathname
-      const isInitialLoad = currentPath === '/' || 
-                           currentPath === '/loading' || 
-                           currentPath === '/search' ||
-                           currentPath === '/papers' ||
-                           currentPath === '/authors' ||
-                           currentPath === '/recommendations'
-      
-      if (isInitialLoad) {
-        setTimeout(() => {
-          router.push('/')
-        }, 1500)
+      if (debugMode.value) {
+        console.log('🎉 系统完全加载完成，准备跳转')
       }
+      
+      // 通知App组件系统已准备就绪
+      window.dispatchEvent(new CustomEvent('systemReady'))
+      
+      // 延迟一点时间让App组件更新状态
+      setTimeout(() => {
+        // 只有在根路径或特定加载页面时才跳转，避免在论文详情等页面时跳转
+        const currentPath = window.location.pathname
+        const isInitialLoad = currentPath === '/' || 
+                             currentPath === '/loading' || 
+                             currentPath === '/search' ||
+                             currentPath === '/papers' ||
+                             currentPath === '/authors' ||
+                             currentPath === '/recommendations'
+        
+        if (isInitialLoad) {
+          if (debugMode.value) {
+            console.log('🚀 系统加载完成，准备跳转到主页')
+          }
+          
+          // 直接跳转到主页
+          router.push('/').then(() => {
+            if (debugMode.value) {
+              console.log('✅ 跳转到主页完成')
+            }
+          }).catch((error) => {
+            if (debugMode.value) {
+              console.error('❌ 跳转失败，使用强制刷新:', error)
+            }
+            // 如果路由跳转失败，强制刷新页面
+            window.location.href = '/'
+          })
+        }
+      }, 500) // 减少延迟时间
+    } else {
+      // 如果系统还在加载中，设置一个较长的延迟再次检查
+      if (debugMode.value) {
+        console.log('⏳ 系统仍在加载中，5秒后再次检查')
+      }
+      setTimeout(() => {
+        if (!isChecking.value) {
+          checkStatus()
+        }
+      }, 5000)
     }
     
     error.value = ''
@@ -253,18 +308,27 @@ const checkStatus = async () => {
         err.response?.status === 503 ||
         err.response?.status === undefined) {
       
-      // 完全静默处理连接错误，不输出任何日志
+      if (debugMode.value) {
+        console.log(`❌ 后端连接失败 (第${consecutiveErrors.value}次连续错误):`, err.message)
+      }
+      
       // 使用更激进的指数退避算法
-      if (consecutiveErrors.value > 3) {
+      if (consecutiveErrors.value > 2) {
         retryDelay.value = Math.min(
-          retryDelay.value * 1.8, 
+          retryDelay.value * 1.5, 
           maxRetryDelay.value
         )
+        if (debugMode.value) {
+          console.log(`⏰ 调整重试延迟为: ${retryDelay.value}ms`)
+        }
       }
       
       // 如果连续错误太多，进一步增加延迟
-      if (consecutiveErrors.value > 10) {
+      if (consecutiveErrors.value > 8) {
         retryDelay.value = maxRetryDelay.value
+        if (debugMode.value) {
+          console.log(`⏰ 达到最大重试延迟: ${retryDelay.value}ms`)
+        }
       }
     } else {
       // 其他类型的错误才显示给用户
@@ -274,22 +338,43 @@ const checkStatus = async () => {
     }
     
     // 使用动态延迟重试
-    setTimeout(checkStatus, retryDelay.value)
+    if (debugMode.value) {
+      console.log(`⏳ ${retryDelay.value}ms后重试...`)
+    }
+    setTimeout(() => {
+      isChecking.value = false
+      checkStatus()
+    }, retryDelay.value)
+  } finally {
+    // 确保在finally中重置检查状态
+    if (!isChecking.value) {
+      isChecking.value = false
+    }
   }
 }
 
 onMounted(() => {
+  // 检查URL参数是否启用调试模式
+  const urlParams = new URLSearchParams(window.location.search)
+  debugMode.value = urlParams.get('debug') === 'true'
+  
+  if (debugMode.value) {
+    console.log('🐛 调试模式已启用')
+  }
+  
   // 立即检查一次
   checkStatus()
   
-  // 每2秒检查一次状态
-  checkInterval.value = setInterval(checkStatus, 2000)
+  // 不再使用定时器，完全依赖重试机制
+  // checkInterval.value = setInterval(checkStatus, 2000)
 })
 
 onUnmounted(() => {
   if (checkInterval.value) {
     clearInterval(checkInterval.value)
   }
+  // 清理重试定时器
+  isChecking.value = false
 })
 </script>
 

@@ -265,17 +265,30 @@ def rerank_search_results(user_id: str, results: List[Dict[str, Any]],
     if not user_data:
         return results
     
-    user_interests = user_data.get("research_interests", [])
-    reading_history = user_data.get("reading_history", [])
-    followed_authors = user_data.get("followed_authors", [])
+    def _to_str_list(x):
+        if not isinstance(x, (list, tuple)):
+            return []
+        out = []
+        for item in x:
+            if isinstance(item, dict):
+                name = item.get('name') or item.get('title') or item.get('value')
+                if name:
+                    out.append(str(name))
+            else:
+                out.append(str(item))
+        return out
+
+    user_interests = _to_str_list(user_data.get("research_interests", []))
+    reading_history = _to_str_list(user_data.get("reading_history", []))
+    followed_authors = _to_str_list(user_data.get("followed_authors", []))
     
     # 为每个结果计算个性化分数
     for result in results:
         personalization_score = 0.0
         
         # 基于研究兴趣调整
-        paper_keywords = result.get("keywords", [])
-        paper_field = result.get("research_field", "")
+        paper_keywords = _to_str_list(result.get("keywords", []))
+        paper_field = str(result.get("research_field", "") or "")
         for interest in user_interests:
             if interest.lower() in paper_field.lower():
                 personalization_score += 0.3
@@ -284,12 +297,17 @@ def rerank_search_results(user_id: str, results: List[Dict[str, Any]],
                     personalization_score += 0.2
         
         # 基于关注作者调整
-        paper_authors = result.get("authors", [])
-        author_match = len(set(paper_authors) & set(followed_authors))
+        paper_authors = _to_str_list(result.get("authors", []) or result.get("author_names", []))
+        try:
+            author_match = len(set(paper_authors) & set(followed_authors))
+        except Exception:
+            # 兜底：若仍包含不可哈希元素，退化为顺序匹配
+            author_match = sum(1 for a in paper_authors if a in followed_authors)
         personalization_score += author_match * 0.4
         
         # 基于阅读历史调整（避免重复）
-        if result["id"] in reading_history:
+        paper_id = result.get("id") or result.get("paper_id")
+        if paper_id in reading_history:
             personalization_score -= 0.5  # 降低已读论文的排序
         
         # 更新分数（原始相关性分数 + 个性化分数）

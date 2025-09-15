@@ -186,7 +186,7 @@ const props = defineProps<Props>()
 // 响应式数据
 const graphContainer = ref<HTMLElement>()
 const graphDepth = ref(2)
-const maxNodes = ref(50)
+const maxNodes = ref(30)
 const currentLayout = ref('force')
 const selectedPaper = ref<GraphNode | null>(null)
 const loading = ref(false)
@@ -227,8 +227,11 @@ const updateGraph = async () => {
 
     // 阶段2：轮询目标深度，直到节点数增长或超时
     if (targetDepth > 1) {
-      const totalMs = 30000
+      const totalMs = 15000  // 减少超时时间到15秒
       const deadline = Date.now() + totalMs
+      let lastCount = bestCount
+      let noProgressCount = 0
+      
       while (Date.now() < deadline) {
         try {
           const res = await fetch(`/api/papers/citation-graph?paper_id=${props.paperId}&depth=${targetDepth}&max_nodes=${maxNodes.value}`)
@@ -236,14 +239,26 @@ const updateGraph = async () => {
           const count = Array.isArray(data.nodes) ? data.nodes.length : 0
           const elapsed = 1 - Math.max(0, deadline - Date.now()) / totalMs
           loadProgress.value = Math.min(95, 30 + elapsed * 65)
-          // 总是以最新数据覆盖渲染（即便数量未增长，也可能内容已刷新）
-          bestData = data
-          bestCount = Math.max(bestCount, count)
-          renderGraph(data)
+          
+          // 检查是否有进展
+          if (count > lastCount) {
+            lastCount = count
+            noProgressCount = 0
+            bestData = data
+            bestCount = count
+            renderGraph(data)
+          } else {
+            noProgressCount++
+            // 如果连续3次没有进展，提前结束
+            if (noProgressCount >= 3) {
+              console.log('引用图谱构建完成，提前结束轮询')
+              break
+            }
+          }
         } catch (e) {
           // 忽略临时失败，继续轮询
         }
-        await new Promise(r => setTimeout(r, 800))
+        await new Promise(r => setTimeout(r, 1000))  // 增加轮询间隔到1秒
       }
       // 最后一轮保证显示最新数据并收尾
       loadProgress.value = 100

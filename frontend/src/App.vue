@@ -3,6 +3,13 @@
     <!-- 系统加载页面 - 只在初始加载且未导航时显示 -->
     <SystemLoading v-if="!systemReady && !hasNavigated" />
     
+    <!-- 调试信息 -->
+    <div v-if="debugMode" class="fixed top-4 left-4 bg-black text-white p-2 rounded text-xs z-50">
+      <div>systemReady: {{ systemReady }}</div>
+      <div>hasNavigated: {{ hasNavigated }}</div>
+      <div>route.path: {{ route.path }}</div>
+    </div>
+    
     <!-- 主应用 -->
     <div v-else class="min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors duration-300">
       <!-- 导航栏 -->
@@ -100,6 +107,7 @@ const route = useRoute()
 
 const systemReady = ref(false)
 const hasNavigated = ref(false) // 标记用户是否已经导航到具体页面
+const debugMode = ref(false) // 调试模式
 
 const showUserMenu = ref(false)
 const notification = ref({
@@ -139,18 +147,10 @@ const logout = async () => {
   showUserMenu.value = false
 }
 
-// App级别的重试控制
-let appRetryCount = 0
-let appRetryDelay = 5000 // 5秒初始延迟
-let statusCheckInterval: NodeJS.Timeout | null = null
-
+// App级别的系统状态管理（简化版，避免与SystemLoading重复）
 const checkSystemStatus = async () => {
   // 如果系统已经准备好，停止检查
   if (systemReady.value) {
-    if (statusCheckInterval) {
-      clearTimeout(statusCheckInterval)
-      statusCheckInterval = null
-    }
     return
   }
   
@@ -161,38 +161,16 @@ const checkSystemStatus = async () => {
     })
     if (response.data.overall === 'ready') {
       systemReady.value = true
-      // 系统准备好后，停止检查
-      appRetryCount = 0
-      appRetryDelay = 5000
-      if (statusCheckInterval) {
-        clearTimeout(statusCheckInterval)
-        statusCheckInterval = null
-      }
-      return
-    } else {
-      // 如果系统未准备好，继续检查
-      statusCheckInterval = setTimeout(checkSystemStatus, appRetryDelay)
+      console.log('🎉 App检测到系统已准备就绪')
     }
   } catch (error: any) {
-    appRetryCount++
-    
-    // 静默处理连接错误，不在控制台输出
-    if (error.code === 'ECONNREFUSED' || 
-        error.code === 'ETIMEDOUT' ||
-        error.message?.includes('ECONNREFUSED') || 
-        error.message?.includes('ETIMEDOUT') ||
-        error.message?.includes('timeout') ||
-        error.response?.status === 503) {
-      // 静默处理，使用指数退避
-      if (appRetryCount > 3) {
-        appRetryDelay = Math.min(appRetryDelay * 1.5, 15000) // 最大15秒
-      }
-    } else {
+    // App级别只做简单的状态检查，不进行重试
+    // 重试逻辑完全交给SystemLoading组件处理
+    if (error.code !== 'ECONNREFUSED' && 
+        !error.message?.includes('ECONNREFUSED') && 
+        error.response?.status !== 503) {
       console.error('App系统状态检查失败:', error)
-      appRetryCount = 0
-      appRetryDelay = 5000
     }
-    statusCheckInterval = setTimeout(checkSystemStatus, appRetryDelay)
   }
 }
 
@@ -205,19 +183,32 @@ watch(() => route.path, (newPath) => {
 }, { immediate: true })
 
 onMounted(() => {
-  // 检查系统状态
-  checkSystemStatus()
+  // 检查URL参数是否启用调试模式
+  const urlParams = new URLSearchParams(window.location.search)
+  debugMode.value = urlParams.get('debug') === 'true'
   
   // 初始化用户状态
   userStore.initializeAuth()
+  
+  // 延迟检查系统状态，让SystemLoading组件先处理
+  setTimeout(() => {
+    checkSystemStatus()
+  }, 1000)
+  
+  // 监听系统准备就绪事件
+  window.addEventListener('systemReady', () => {
+    console.log('🎉 收到系统准备就绪事件')
+    systemReady.value = true
+    // 强制更新组件
+    nextTick(() => {
+      console.log('🔄 App组件状态已更新')
+    })
+  })
 })
 
 // 组件卸载时清理定时器
 onUnmounted(() => {
-  if (statusCheckInterval) {
-    clearTimeout(statusCheckInterval)
-    statusCheckInterval = null
-  }
+  // 清理逻辑已简化
 })
 </script>
 

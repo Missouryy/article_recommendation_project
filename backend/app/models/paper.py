@@ -114,7 +114,7 @@ class AuthorSummary(BaseModel):
 class SearchRequest(BaseModel):
     """搜索请求模型"""
     query: str
-    search_type: str = "hybrid"  # "hybrid", "semantic", "exact"
+    search_type: str = "vector"  # "vector", "hybrid", "semantic", "exact"
     filters: Optional[Dict[str, Any]] = None
     sort_by: str = "relevance"  # "relevance", "date", "citation", "truth_value"
     sort_order: str = "desc"  # "asc", "desc"

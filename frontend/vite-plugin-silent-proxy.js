@@ -10,7 +10,8 @@ export function silentProxyPlugin() {
         
         // 重写write方法，过滤错误日志
         res.write = function(chunk, encoding, callback) {
-          if (chunk && typeof chunk === 'string' && chunk.includes('ECONNREFUSED')) {
+          if (chunk && typeof chunk === 'string' && 
+              (chunk.includes('ECONNREFUSED') || chunk.includes('Backend not ready'))) {
             // 静默处理，不输出到控制台
             return true
           }
@@ -19,7 +20,8 @@ export function silentProxyPlugin() {
         
         // 重写end方法
         res.end = function(chunk, encoding, callback) {
-          if (chunk && typeof chunk === 'string' && chunk.includes('ECONNREFUSED')) {
+          if (chunk && typeof chunk === 'string' && 
+              (chunk.includes('ECONNREFUSED') || chunk.includes('Backend not ready'))) {
             // 静默处理
             return this
           }
@@ -28,6 +30,19 @@ export function silentProxyPlugin() {
         
         next()
       })
+      
+      // 拦截控制台输出，过滤ECONNREFUSED错误
+      const originalConsoleError = console.error
+      console.error = function(...args) {
+        const message = args.join(' ')
+        if (message.includes('ECONNREFUSED') || 
+            message.includes('http proxy error') ||
+            message.includes('Backend not ready')) {
+          // 静默处理，不输出
+          return
+        }
+        originalConsoleError.apply(console, args)
+      }
     }
   }
 }

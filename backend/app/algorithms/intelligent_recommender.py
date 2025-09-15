@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import List, Dict, Any, Optional
 from sentence_transformers import SentenceTransformer
 from ..db.config import db_config
+from .model_manager import model_manager
 
 logger = logging.getLogger(__name__)
 
@@ -78,12 +79,12 @@ class IntelligentRecommender:
                 logger.warning(f"ID映射文件不存在: {id_map_path}")
                 return
             
-            # 加载BERT模型
-            try:
-                self.model = SentenceTransformer('all-MiniLM-L6-v2')
-                logger.info("成功加载BERT模型")
-            except Exception as e:
-                logger.warning(f"加载BERT模型失败: {str(e)}")
+            # 使用共享的BERT模型管理器
+            self.model = model_manager.get_model()
+            if self.model is None:
+                logger.warning(f"无法获取BERT模型")
+                return
+            logger.info("成功获取共享BERT模型")
                 
         except Exception as e:
             logger.error(f"加载资源时出错: {str(e)}")
@@ -296,21 +297,35 @@ class IntelligentRecommender:
             import numpy as np
             
             ids_to_reconstruct = np.array(history_int_ids, dtype='int64')
+            logger.info(f"[智能推荐调试] 历史论文int_ids: {ids_to_reconstruct[:5]}...")
+            logger.info(f"[智能推荐调试] 权重: {weights[:5]}...")
             
             # 使用IndexIDMap的内部基础索引进行reconstruct（参考test.py第88行）
             base_index = self.index.index
             history_vectors_list = [base_index.reconstruct(int(i)) for i in ids_to_reconstruct]
             history_vectors = np.array(history_vectors_list)
             
+            logger.info(f"[智能推荐调试] 历史向量形状: {history_vectors.shape}")
+            logger.info(f"[智能推荐调试] 第一个历史向量前10个值: {history_vectors[0][:10]}")
+            logger.info(f"[智能推荐调试] 第一个历史向量范围: min={history_vectors[0].min():.6f}, max={history_vectors[0].max():.6f}")
+            logger.info(f"[智能推荐调试] 第一个历史向量是否全零: {np.allclose(history_vectors[0], 0)}")
+            
             # 计算加权平均向量（参考test.py第92-94行）
             weights_array = np.array(weights).reshape(-1, 1)
             user_profile_vector = np.sum(history_vectors * weights_array, axis=0) / np.sum(weights_array)
+            
+            logger.info(f"[智能推荐调试] 用户画像向量形状: {user_profile_vector.shape}")
+            logger.info(f"[智能推荐调试] 用户画像向量前10个值: {user_profile_vector[:10]}")
+            logger.info(f"[智能推荐调试] 用户画像向量范围: min={user_profile_vector.min():.6f}, max={user_profile_vector.max():.6f}")
+            logger.info(f"[智能推荐调试] 用户画像向量是否全零: {np.allclose(user_profile_vector, 0)}")
             
             # 转换为float32并归一化（参考test.py第97-99行）
             user_profile_vector_float32 = user_profile_vector.astype(np.float32)
             import faiss
             faiss.normalize_L2(user_profile_vector_float32.reshape(1, -1))
             
+            logger.info(f"[智能推荐调试] 归一化后向量前10个值: {user_profile_vector_float32[:10]}")
+            logger.info(f"[智能推荐调试] 归一化后向量范围: min={user_profile_vector_float32.min():.6f}, max={user_profile_vector_float32.max():.6f}")
             logger.info("用户画像向量生成成功")
             
             # 步骤2: 使用用户画像向量在Faiss中进行搜索（参考test.py第104-110行）
@@ -319,6 +334,11 @@ class IntelligentRecommender:
             
             # 使用转换后的float32向量进行搜索
             distances, neighbor_int_ids = self.index.search(user_profile_vector_float32.reshape(1, -1), num_to_search)
+            
+            logger.info(f"[智能推荐调试] FAISS搜索完成，返回 {len(neighbor_int_ids[0])} 个结果")
+            logger.info(f"[智能推荐调试] 前5个int_ids: {neighbor_int_ids[0][:5]}")
+            logger.info(f"[智能推荐调试] 前5个距离: {distances[0][:5]}")
+            logger.info(f"[智能推荐调试] 距离范围: min={distances[0].min():.6f}, max={distances[0].max():.6f}")
             
             # 步骤3: 过滤掉已知论文并格式化结果（参考test.py第112-130行）
             user_known_ids = set(read_history + favorite_history)

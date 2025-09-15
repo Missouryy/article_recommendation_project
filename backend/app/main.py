@@ -83,6 +83,28 @@ async def startup_event():
         print("📚 初始化模拟数据库...")
         print("🔧 配置算法模块...")
         
+        # 预加载共享BERT模型
+        print("🤖 预加载共享BERT模型...")
+        try:
+            from .algorithms.model_manager import model_manager
+            model = model_manager.get_model()
+            if model is not None:
+                print("✅ 共享BERT模型加载完成")
+            else:
+                print("⚠️ 共享BERT模型加载失败")
+        except Exception as e:
+            print(f"⚠️ 共享BERT模型加载失败: {e}")
+        
+        # 预加载向量搜索系统资源
+        print("🔍 预加载向量搜索系统资源...")
+        try:
+            from .algorithms.vector_search import vector_searcher
+            await vector_searcher.ensure_loaded()
+            print("✅ 向量搜索系统资源加载完成")
+        except Exception as e:
+            print(f"⚠️ 向量搜索系统资源加载失败: {e}")
+            print("   系统将继续运行，但搜索功能可能受限")
+        
         # 预加载智能推荐系统资源
         print("🤖 预加载智能推荐系统资源...")
         try:
@@ -177,6 +199,9 @@ async def system_status():
         
         try:
             from .api.recommendations import recommender
+            # 检查向量搜索器状态
+            from .algorithms.vector_search import vector_searcher
+            
             if recommender._loaded:
                 recommender_status = "ready"
                 # 检查具体组件
@@ -188,6 +213,17 @@ async def system_status():
                 recommender_status = "loading"
                 faiss_status = "loading"
                 bert_status = "loading"
+            
+            # 向量搜索器状态
+            try:
+                if getattr(vector_searcher, '_loaded', False):
+                    search_status = "ready"
+                elif getattr(vector_searcher, '_loading', False):
+                    search_status = "loading"
+                else:
+                    search_status = "not_loaded"
+            except Exception:
+                search_status = "error"
         except Exception as e:
             recommender_status = "error"
             faiss_status = "error"
@@ -213,6 +249,7 @@ async def system_status():
                 "database": {"status": "ready", "progress": 100},
                 "faiss_index": {"status": faiss_status, "progress": 100 if faiss_status == "ready" else 0},
                 "bert_model": {"status": bert_status, "progress": 100 if bert_status == "ready" else 0},
+                "vector_search": {"status": search_status if 'search_status' in locals() else "not_loaded", "progress": 100 if ('search_status' in locals() and search_status == "ready") else 0},
                 "api": {"status": "ready", "progress": 100}
             },
             "progress": progress,
@@ -226,6 +263,7 @@ async def system_status():
                 "database": {"status": "ready", "progress": 100},
                 "faiss_index": {"status": "error", "progress": 0},
                 "bert_model": {"status": "error", "progress": 0},
+                "vector_search": {"status": "error", "progress": 0},
                 "api": {"status": "ready", "progress": 100}
             },
             "progress": 25,
