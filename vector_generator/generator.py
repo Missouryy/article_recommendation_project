@@ -106,33 +106,33 @@ def process_papers():
                 cursor.execute(query, batch_string_ids)
                 batch_data = cursor.fetchall()
 
-                texts_to_encode, int_ids_for_faiss, valid_string_ids_in_batch, zero_vector_indices = [], [], [], []
+                texts_to_encode, int_ids_for_faiss, valid_string_ids_in_batch = [], [], []
+                all_processed_ids = []  # 记录所有处理的ID（包括无标题的）
 
                 for idx, row_data in enumerate(batch_data):
                     string_id, title, journal, abstract, keywords, topics, domain = row_data
-                    if string_id not in string_to_int_map:
-                        new_int_id = len(string_to_int_map)
-                        string_to_int_map[string_id] = new_int_id
+                    all_processed_ids.append(string_id)  # 所有ID都标记为已处理
                     
-                    int_ids_for_faiss.append(string_to_int_map[string_id])
-                    valid_string_ids_in_batch.append(string_id)
-
-                    if not title:
-                        zero_vector_indices.append(idx)
-                        texts_to_encode.append("")
-                    else:
+                    # 只处理有标题的论文
+                    if title:
+                        # 只为有标题的论文分配整数ID
+                        if string_id not in string_to_int_map:
+                            new_int_id = len(string_to_int_map)
+                            string_to_int_map[string_id] = new_int_id
+                        
+                        int_ids_for_faiss.append(string_to_int_map[string_id])
+                        valid_string_ids_in_batch.append(string_id)
                         texts_to_encode.append(format_paper_text(title, journal, abstract, keywords, topics, domain))
                 
                 if texts_to_encode:
                     embeddings = model.encode(texts_to_encode, convert_to_numpy=True, show_progress_bar=False)
-                    if zero_vector_indices:
-                        embeddings[zero_vector_indices] = np.zeros(embedding_dim, dtype=np.float32)
-
+                    
                     ids_to_add = np.array(int_ids_for_faiss).astype('int64')
                     index.add_with_ids(embeddings, ids_to_add)
 
-                    processed_string_ids.update(valid_string_ids_in_batch)
-                    pbar.update(len(batch_string_ids))
+                # 更新所有处理的ID（包括无标题的）
+                processed_string_ids.update(all_processed_ids)
+                pbar.update(len(batch_string_ids))
 
                 batches_processed += 1
 

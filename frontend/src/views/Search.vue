@@ -55,36 +55,8 @@
           找到 {{ totalResults }} 篇相关论文
         </div>
         
-        <!-- 视图切换标签 -->
-        <div class="border-b border-gray-200 dark:border-gray-700">
-          <nav class="-mb-px flex space-x-8">
-            <button
-              @click="activeView = 'list'"
-              :class="[
-                'py-2 px-1 border-b-2 font-medium text-sm transition-colors',
-                activeView === 'list'
-                  ? 'border-accent-500 text-accent-600 dark:text-accent-400'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300'
-              ]"
-            >
-              列表视图
-            </button>
-            <button
-              @click="activeView = 'graph'"
-              :class="[
-                'py-2 px-1 border-b-2 font-medium text-sm transition-colors',
-                activeView === 'graph'
-                  ? 'border-accent-500 text-accent-600 dark:text-accent-400'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300'
-              ]"
-            >
-              引用图谱
-            </button>
-          </nav>
-        </div>
-        
-        <!-- 列表视图 -->
-        <div v-if="activeView === 'list'" class="grid gap-6">
+        <!-- 结果列表 -->
+        <div class="grid gap-6">
           <div
             v-for="paper in searchResults"
             :key="paper.id"
@@ -103,50 +75,23 @@
             </div>
           </div>
         </div>
-        
-        <!-- 引用图谱视图 -->
-        <div v-if="activeView === 'graph'" class="space-y-4">
-          <div v-if="selectedPaperForGraph" class="mb-4">
-            <div class="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
-              <h3 class="text-lg font-semibold text-blue-900 dark:text-blue-100 mb-2">
-                当前显示论文的引用关系图谱
-              </h3>
-              <p class="text-blue-800 dark:text-blue-200 text-sm">
-                {{ selectedPaperForGraph.title }}
-              </p>
-              <p class="text-blue-700 dark:text-blue-300 text-xs mt-1">
-                {{ selectedPaperForGraph.author_names.join(', ') }} • {{ selectedPaperForGraph.year }}
-              </p>
-            </div>
-          </div>
-          
-          <div v-if="!selectedPaperForGraph" class="text-center py-12">
-            <div class="text-gray-500 dark:text-gray-400 mb-4">
-              <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
-              </svg>
-            </div>
-            <p class="text-gray-500 dark:text-gray-400 mb-4">请从左侧列表中选择一篇论文来查看其引用关系图谱</p>
-            <div class="text-sm text-gray-400 dark:text-gray-500">
-              <p>图谱将显示：</p>
-              <ul class="mt-2 space-y-1">
-                <li>• 该论文引用的其他论文</li>
-                <li>• 引用该论文的其他论文</li>
-                <li>• 二级引用关系</li>
-              </ul>
-            </div>
-          </div>
-          
-          <CitationGraph 
-            v-if="selectedPaperForGraph" 
-            :paper-id="selectedPaperForGraph.id"
-            class="w-full"
-          />
-        </div>
       </div>
 
+      <!-- 错误状态 -->
+      <div v-else-if="error" class="text-center py-12">
+        <div class="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-6 max-w-md mx-auto">
+          <p class="text-red-600 dark:text-red-400 mb-4">{{ error }}</p>
+          <button 
+            @click="handleSearch"
+            class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors"
+          >
+            重试搜索
+          </button>
+        </div>
+      </div>
+      
       <!-- 空状态 -->
-      <div v-else-if="!loading && searchQuery" class="text-center py-12">
+      <div v-else-if="!loading && searchQuery && !error" class="text-center py-12">
         <p class="text-gray-500 dark:text-gray-400">未找到相关论文，请尝试其他关键词</p>
       </div>
     </div>
@@ -155,17 +100,27 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
-import type { Paper } from '@/types'
+// 简化本页列表项的显示类型，避免TS推断为never
+type SearchItem = {
+  id: string
+  short_id?: string
+  title: string
+  author_names: string[]
+  year: number
+  journal: string
+  citation_count: number
+}
 import { useRoute } from 'vue-router'
 import { api } from '@/services/api'
-import CitationGraph from '@/components/CitationGraph.vue'
 
 const route = useRoute()
 
 const searchQuery = ref('')
-const searchResults = ref([])
+const searchResults = ref<SearchItem[]>([])
 const totalResults = ref(0)
 const loading = ref(false)
+const error = ref('')
+// 去掉图谱视图，默认只有列表
 const activeView = ref('list')
 const searched = ref(false)
 const selectedPaperForGraph = ref(null)
@@ -176,21 +131,55 @@ const handleSearch = async () => {
   
   try {
     loading.value = true
+    error.value = ''
+    console.log('[SearchUI] 开始搜索:', searchQuery.value)
+    
     const response = await api.search.papers({
       query: searchQuery.value,
-      search_type: 'hybrid',
+      search_type: 'vector',
       limit: 20
     })
     
-    searchResults.value = response.data.papers
-    totalResults.value = response.data.total
+    console.log('[SearchUI] 搜索响应:', response.data)
     
-    // 如果有搜索结果，默认选择第一篇论文用于图谱显示
-    if (response.data.papers.length > 0) {
-      selectedPaperForGraph.value = response.data.papers[0]
+    const papers = Array.isArray(response.data?.papers) ? response.data.papers : []
+    const total = typeof response.data?.total === 'number' ? response.data.total : papers.length
+    
+    // 创建新引用触发渲染，并只保留必要字段避免响应式卡顿
+    searchResults.value = papers.map((p: any) => ({
+      id: p.id || p.paper_id,
+      short_id: p.short_id || '',
+      title: p.title || '',
+      author_names: Array.isArray(p.author_names) ? p.author_names : [],
+      year: p.year || 0,
+      journal: p.journal || '',
+      citation_count: p.citation_count || 0
+    }))
+    totalResults.value = total
+    
+    console.log('[SearchUI] 搜索结果处理完成:', {
+      papersCount: papers.length,
+      total: total,
+      searchResultsLength: searchResults.value.length
+    })
+    
+    // 不再在搜索时自动加载图谱
+  } catch (err: any) {
+    console.error('搜索失败:', err)
+    // 显示错误信息给用户
+    searchResults.value = []
+    totalResults.value = 0
+    
+    // 设置错误信息
+    if (err.response?.status === 500) {
+      error.value = '系统正在加载中，请稍后重试'
+    } else if (err.message?.includes('timeout')) {
+      error.value = '搜索超时，请稍后重试'
+    } else {
+      error.value = '搜索失败，请稍后重试'
     }
-  } catch (error) {
-    console.error('搜索失败:', error)
+    
+    console.log('[SearchUI] 错误信息:', error.value)
   } finally {
     loading.value = false
   }

@@ -8,7 +8,7 @@ from ..models.paper import SearchRequest, SearchResponse, PaperSummary, SearchFi
 from ..models.user import User
 from ..api.auth import get_current_user, get_current_user_optional
 from ..db.database import db, user_manager
-
+from ..algorithms.vector_search import vector_searcher
 from ..algorithms.recommender import rerank_search_results
 
 router = APIRouter(prefix="/search", tags=["搜索"])
@@ -17,27 +17,97 @@ router = APIRouter(prefix="/search", tags=["搜索"])
 @router.post("/", response_model=SearchResponse, summary="论文搜索")
 async def search_papers(search_request: SearchRequest, current_user: Optional[User] = Depends(get_current_user_optional)):
     """
-    论文搜索API
+    论文搜索API - 基于向量相似度（默认）并兼容传统方式
     
     支持多种搜索模式：
-    - **hybrid**: 混合搜索（默认）- 同时匹配标题、作者、关键词等
-    - **semantic**: 语义搜索 - 适用于长句或段落查询
-    - **exact**: 精确搜索 - 严格匹配查询词
+    - **vector**: 向量搜索（默认）- 基于BERT语义相似度
+    - **hybrid**: 混合搜索 - 向量搜索 + 文本匹配合并
+    - **semantic**: 语义搜索（传统）
+    - **exact**: 精确搜索（传统）
     
     排序选项：
-    - **relevance**: 相关度排序（默认）
+    - **relevance**: 相关度排序（默认，使用relevance_score）
     - **date**: 发表时间排序
     - **citation**: 引用数排序
     - **truth_value**: 真值分数排序
     """
     start_time = time.time()
-    
-    # 执行搜索
-    results = await perform_search(
-        query=search_request.query,
-        search_type=search_request.search_type,
-        filters=search_request.filters
-    )
+
+    results: List[Dict[str, Any]] = []
+
+    try:
+        # 调试起点
+        print(f"[VectorSearch][API] start query='{search_request.query}' type='{search_request.search_type}' limit={search_request.limit} offset={search_request.offset}")
+        if search_request.search_type in ("vector", "hybrid"):
+            # 确保向量搜索资源已加载
+            try:
+                await vector_searcher.ensure_loaded()
+            except Exception as e:
+                print(f"[VectorSearch][API] 向量搜索资源加载失败: {e}")
+                # 如果向量搜索不可用，降级为文本搜索
+                search_request.search_type = "semantic"
+            
+            # 使用向量搜索（先不分页，获取更大候选集以便后续排序/合并）
+            vector_results = []
+            if search_request.search_type in ("vector", "hybrid"):
+                vector_results = await vector_searcher.vector_search(
+                    query=search_request.query,
+                    limit=search_request.limit + search_request.offset + 50,
+                    offset=0,
+                    filters=search_request.filters
+                )
+                
+            # 若因资源未就绪被降级为文本，做一次提示（不抛错）
+            if vector_results and isinstance(vector_results[0], dict) and 'similarity_score' not in vector_results[0]:
+                print("[VectorSearch][API] vector path downgraded (no similarity_score in first item)")
+            # 打印前70条的id与title
+            try:
+                preview = []
+                for x in vector_results[:70]:
+                    pid = x.get('id') or x.get('paper_id')
+                    title = (x.get('title') or '')
+                    preview.append({ 'id': pid, 'title': title[:120] })
+                print(f"[VectorSearch][API] vector preview (top {len(preview)}): {preview}")
+            except Exception as e:
+                print(f"[VectorSearch][API] vector preview error: {e}")
+
+            # 将相似度映射为通用的relevance_score，便于统一排序
+            for item in vector_results:
+                if 'similarity_score' in item and 'relevance_score' not in item:
+                    item['relevance_score'] = float(item.get('similarity_score') or 0.0)
+
+            results = vector_results
+            print(f"[VectorSearch][API] vector candidates={len(results)}")
+            
+
+            if search_request.search_type == "hybrid":
+                # 传统文本搜索作为补充信号
+                text_results = await perform_search(
+                    query=search_request.query,
+                    search_type="exact",
+                    filters=search_request.filters
+                )
+                # 文本结果补充relevance_score（若无）
+                for tr in text_results:
+                    tr.setdefault('relevance_score', 0.3)
+                results = merge_search_results(results, text_results)
+                print(f"[VectorSearch][API] hybrid merged={len(results)}")
+        else:
+            # 使用传统方法
+            results = await perform_search(
+                query=search_request.query,
+                search_type=search_request.search_type,
+                filters=search_request.filters
+            )
+            print(f"[VectorSearch][API] legacy results={len(results)}")
+    except Exception as e:
+        # 向量路径出错时兜底到传统方式，避免后端报错
+        print(f"[VectorSearch][API] error in vector path: {e}, fallback to legacy")
+        results = await perform_search(
+            query=search_request.query,
+            search_type="hybrid",
+            filters=search_request.filters
+        )
     
     # 应用排序
     sorted_results = apply_sorting(
@@ -45,17 +115,50 @@ async def search_papers(search_request: SearchRequest, current_user: Optional[Us
         sort_by=search_request.sort_by,
         sort_order=search_request.sort_order
     )
-    
+    print(f"[VectorSearch][API] sorted_results={len(sorted_results)}")
 
+    # 规范化字段，避免后续重排/模型校验因 dict 元素报错
+    def _to_str_list(x):
+        if x is None:
+            return []
+        out = []
+        for item in x if isinstance(x, (list, tuple)) else []:
+            if isinstance(item, dict):
+                name = item.get('name') or item.get('title') or item.get('value')
+                if name:
+                    out.append(str(name))
+            else:
+                out.append(str(item))
+        return out
+
+    for r in sorted_results:
+        if isinstance(r.get('author_names'), (list, tuple)):
+            r['author_names'] = _to_str_list(r.get('author_names'))
+        elif 'authors' in r and isinstance(r.get('authors'), (list, tuple)):
+            # 退化为从 authors 提取 name
+            r['author_names'] = _to_str_list(r.get('authors'))
+        else:
+            r.setdefault('author_names', [])
+
+        if isinstance(r.get('keywords'), (list, tuple)):
+            r['keywords'] = _to_str_list(r.get('keywords'))
+        else:
+            r.setdefault('keywords', [])
+
+        if not isinstance(r.get('research_field'), str):
+            r['research_field'] = str(r.get('research_field') or '')
+    
     # 如果用户已登录，应用个性化重排序
     if current_user:
         user_data = await user_manager.get_user_by_id(current_user.id)
         if user_data:
+            print(f"[VectorSearch][API] start rerank for user={current_user.id}")
             sorted_results = rerank_search_results(
                 user_id=current_user.id,
                 results=sorted_results,
                 user_data=user_data
             )
+            print(f"[VectorSearch][API] rerank done count={len(sorted_results)}")
             
             # 记录搜索历史
             await user_manager.add_search_history(current_user.id, search_request.query)
@@ -63,20 +166,21 @@ async def search_papers(search_request: SearchRequest, current_user: Optional[Us
     # 分页
     total = len(sorted_results)
     paginated_results = sorted_results[search_request.offset:search_request.offset + search_request.limit]
+    print(f"[VectorSearch][API] page size={len(paginated_results)} offset={search_request.offset}")
     
     # 转换为PaperSummary格式
     paper_summaries = []
     for result in paginated_results:
         summary = PaperSummary(
-            id=result["id"],
-            short_id=result.get("short_id"),
-            title=result["title"],
-            author_names=result["author_names"],
-            year=result["year"],
-            journal=result["journal"],
-            citation_count=result["citation_count"],
+            id=result.get("id", result.get("paper_id", "")),
+            short_id=result.get("short_id", ""),
+            title=result.get("title", ""),
+            author_names=result.get("author_names", []),
+            year=result.get("year", 0),
+            journal=result.get("journal", ""),
+            citation_count=result.get("citation_count", 0),
             truth_value_score=result.get("truth_value_score"),
-            research_field=result["research_field"]
+            research_field=result.get("research_field", "")
         )
         paper_summaries.append(summary)
     
@@ -91,45 +195,72 @@ async def search_papers(search_request: SearchRequest, current_user: Optional[Us
         execution_time=round(execution_time, 3)
     )
 
+def merge_search_results(vector_results: List[Dict[str, Any]], text_results: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """合并向量搜索结果和文本搜索结果"""
+    # 使用字典去重，优先保留向量搜索结果
+    merged = {}
+    
+    # 先添加向量搜索结果
+    for result in vector_results:
+        paper_id = result.get('id') or result.get('paper_id')
+        if paper_id:
+            merged[paper_id] = result
+    
+    # 再添加文本搜索结果（如果不存在）
+    for result in text_results:
+        paper_id = result.get('id') or result.get('paper_id')
+        if paper_id and paper_id not in merged:
+            # 为文本搜索结果添加默认相似度分数
+            result['similarity_score'] = 0.3
+            result.setdefault('relevance_score', 0.3)
+            merged[paper_id] = result
+    
+    # 按相似度/相关度排序
+    values = list(merged.values())
+    for v in values:
+        if 'relevance_score' not in v:
+            try:
+                v['relevance_score'] = float(v.get('similarity_score') or 0.0)
+            except Exception:
+                v['relevance_score'] = 0.0
+    # 防止出现不可比较项导致的排序异常
+    return sorted(values, key=lambda x: (x.get('relevance_score') or 0.0), reverse=True)
+
 @router.get("/suggestions", summary="搜索建议")
 async def get_search_suggestions(
     q: str = Query(..., description="查询前缀"),
     limit: int = Query(10, description="建议数量限制")
 ):
     """
-    获取搜索建议/自动补全
+    获取搜索建议/自动补全 - 优先向量，失败回退文本
     
     - **q**: 用户输入的查询前缀
     - **limit**: 返回建议的最大数量
     """
-    suggestions = []
-    q_lower = q.lower()
-    
-    # 从论文标题中提取建议
-    papers = await db.get_papers(limit=100)  # 获取一些论文用于建议
-    for paper in papers:
-        title_words = paper["title"].lower().split()
-        for word in title_words:
-            if word.startswith(q_lower) and len(word) > len(q):
-                suggestions.append(word)
-        
-        # 从关键词中提取建议
-        for keyword in paper["keywords"]:
-            if keyword.lower().startswith(q_lower):
-                suggestions.append(keyword)
-        
-        # 从作者名中提取建议
-        for author_name in paper["author_names"]:
-            if author_name.lower().startswith(q_lower):
-                suggestions.append(author_name)
-    
-    # 去重并限制数量
-    unique_suggestions = list(set(suggestions))[:limit]
-    
-    return {
-        "query": q,
-        "suggestions": unique_suggestions
-    }
+    # 先尝试向量建议
+    try:
+        suggestions = await vector_searcher.get_search_suggestions(q, limit)
+        return {"suggestions": suggestions}
+    except Exception:
+        # 回退到传统方式
+        try:
+            suggestions = []
+            q_lower = q.lower()
+            papers = await db.get_papers(limit=200)
+            for paper in papers:
+                title = (paper.get("title") or "").lower()
+                if title.startswith(q_lower):
+                    suggestions.append(paper["title"])  # 原始大小写
+                for keyword in paper.get("keywords", []):
+                    if isinstance(keyword, str) and keyword.lower().startswith(q_lower):
+                        suggestions.append(keyword)
+                for author_name in paper.get("author_names", []):
+                    if isinstance(author_name, str) and author_name.lower().startswith(q_lower):
+                        suggestions.append(author_name)
+            unique_suggestions = list(dict.fromkeys(suggestions))[:limit]
+            return {"suggestions": unique_suggestions}
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"获取搜索建议失败: {str(e)}")
 
 @router.get("/filters", summary="获取可用过滤器")
 async def get_available_filters():

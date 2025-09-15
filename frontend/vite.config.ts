@@ -31,22 +31,35 @@ export default defineConfig({
         target: 'http://127.0.0.1:8000',
         changeOrigin: true,
         secure: false,
-        timeout: 5000,
+        timeout: 3000, // 减少超时时间
         configure: (proxy, options) => {
           // 完全静默处理所有代理错误
           proxy.on('error', (err: any, req, res) => {
-            // 静默处理，不输出任何错误到控制台
-            res.writeHead(503, {
-              'Content-Type': 'application/json',
-              'Access-Control-Allow-Origin': '*',
-              'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
-              'Access-Control-Allow-Headers': 'Content-Type, Authorization'
-            })
-            res.end(JSON.stringify({ 
-              error: 'Backend not ready',
-              code: 'ECONNREFUSED',
-              message: '后端服务尚未启动'
-            }))
+            // 完全静默处理ECONNREFUSED错误
+            if (err.code === 'ECONNREFUSED' || err.message?.includes('ECONNREFUSED')) {
+              res.writeHead(503, {
+                'Content-Type': 'application/json',
+                'Access-Control-Allow-Origin': '*',
+                'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+                'Access-Control-Allow-Headers': 'Content-Type, Authorization'
+              })
+              res.end(JSON.stringify({ 
+                error: 'Backend not ready',
+                code: 'ECONNREFUSED',
+                message: '后端服务尚未启动'
+              }))
+              return // 不输出任何日志
+            }
+            
+            // 其他错误才输出
+            console.error('代理错误:', err)
+            res.writeHead(500, { 'Content-Type': 'application/json' })
+            res.end(JSON.stringify({ error: 'Proxy error', message: err.message }))
+          })
+          
+          // 拦截请求，添加静默处理
+          proxy.on('proxyReq', (proxyReq, req, res) => {
+            // 可以在这里添加请求日志（调试用）
           })
         }
       }
