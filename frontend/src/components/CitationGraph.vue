@@ -220,13 +220,10 @@ const updateGraph = async () => {
     // 阶段1：先拉取 depth=1，快速渲染
     const res1 = await fetch(`/api/papers/citation-graph?paper_id=${encodeURIComponent(props.paperId)}&depth=${firstDepth}&max_nodes=${maxNodes.value}`)
     const data1: GraphData = await res1.json()
-    let bestData: GraphData | null = null
-    let bestCount = 0
-    if (data1.nodes && data1.nodes.length > 0) {
-      bestData = data1
-      bestCount = data1.nodes.length
-      renderGraph(data1)
-    }
+    // 无论 nodes 是否为空，先渲染一次：renderGraph 内部会保障中心节点存在
+    let bestData: GraphData | null = data1
+    let bestCount = Array.isArray(data1.nodes) ? data1.nodes.length : 0
+    renderGraph(data1)
     loadProgress.value = targetDepth > 1 ? 30 : 100
 
     // 阶段2：轮询目标深度，直到节点数增长或超时

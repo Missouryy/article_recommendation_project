@@ -31,7 +31,7 @@ export default defineConfig({
         target: 'http://127.0.0.1:8000',
         changeOrigin: true,
         secure: false,
-        timeout: 3000,
+        timeout: 6000,
 
         configure: (proxy, options) => {
           // 完全静默处理所有代理错误

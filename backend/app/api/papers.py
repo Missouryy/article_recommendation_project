@@ -516,7 +516,7 @@ async def get_citation_graph(
                 label=ref_paper["title"][:50] + "..." if len(ref_paper["title"]) > 50 else ref_paper["title"],
                 type="paper",
                 size=15.0,
-                color="#F59E0B",  # 橙色
+                color="#F5820B",  # 橙色
                 metadata={
                     "title": ref_paper["title"],
                     "authors": ref_paper["author_names"],

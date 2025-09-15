@@ -210,7 +210,10 @@ const handleSearch = async (resetPage = false) => {
     const response = await api.search.papers({
       query: searchQuery.value,
       search_type: 'vector',
-      limit: 20
+      limit: pageSize.value,
+      offset: (currentPage.value - 1) * pageSize.value,
+      sort_by: sortBy.value,
+      sort_order: sortOrder.value
     })
     const papers = Array.isArray(response.data?.papers) ? response.data.papers : []
     const total = typeof response.data?.total === 'number' ? response.data.total : papers.length
