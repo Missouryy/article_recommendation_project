@@ -245,8 +245,11 @@ const checkStatus = async () => {
     
     // 对于连接错误，完全静默处理
     if (err.code === 'ECONNREFUSED' || 
+        err.code === 'ETIMEDOUT' ||
         err.message?.includes('ECONNREFUSED') || 
+        err.message?.includes('ETIMEDOUT') ||
         err.message?.includes('Network Error') ||
+        err.message?.includes('timeout') ||
         err.response?.status === 503 ||
         err.response?.status === undefined) {
       

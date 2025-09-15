@@ -493,7 +493,7 @@ const loadRecommendations = async () => {
   error.value = null
   
   try {
-    let response
+    let response: any = null
     if (activeTab.value === 'daily') {
       response = await api.recommendations.getDaily({
         limit: 20,
@@ -528,7 +528,7 @@ const loadRecommendations = async () => {
       })
     }
     
-    if (activeTab.value !== 'truth') {
+    if (activeTab.value !== 'truth' && response) {
       recommendations.value = response.data || []
     }
   } catch (err: any) {

@@ -178,7 +178,10 @@ const checkSystemStatus = async () => {
     
     // 静默处理连接错误，不在控制台输出
     if (error.code === 'ECONNREFUSED' || 
+        error.code === 'ETIMEDOUT' ||
         error.message?.includes('ECONNREFUSED') || 
+        error.message?.includes('ETIMEDOUT') ||
+        error.message?.includes('timeout') ||
         error.response?.status === 503) {
       // 静默处理，使用指数退避
       if (appRetryCount > 3) {
