@@ -97,7 +97,7 @@
               v-for="ref in references"
               :key="ref.id"
               class="cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 p-3 rounded"
-              @click="$router.push(`/papers/${ref.short_id || ref.id}`)"
+              @click="$router.push({ name: 'PaperDetail', params: { id: toShortId(ref) } })"
             >
               <h4 class="font-medium text-gray-900 dark:text-white text-sm">{{ ref.title }}</h4>
               <p class="text-xs text-gray-500 dark:text-gray-400">{{ ref.author_names.join(', ') }}</p>
@@ -113,7 +113,7 @@
               v-for="citation in citations"
               :key="citation.id"
               class="cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 p-3 rounded"
-              @click="$router.push(`/papers/${citation.short_id || citation.id}`)"
+              @click="$router.push({ name: 'PaperDetail', params: { id: toShortId(citation) } })"
             >
               <h4 class="font-medium text-gray-900 dark:text-white text-sm">{{ citation.title }}</h4>
               <p class="text-xs text-gray-500 dark:text-gray-400">{{ citation.author_names.join(', ') }}</p>
@@ -128,7 +128,7 @@
         <p class="text-gray-600 dark:text-gray-400 text-sm mb-4">
           可视化展示该论文的引用关系网络，包括参考文献、被引文献以及二级引用关系
         </p>
-        <CitationGraph :paper-id="paper.id" />
+        <CitationGraph :paper-id="toShortId(paper)" />
       </div>
     </div>
 
@@ -143,7 +143,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { api } from '@/services/api'
 import { useUserStore } from '@/stores/user'
@@ -162,6 +162,19 @@ const loading = ref(false)
 const summaryLoading = ref(false)
 const isBookmarked = ref(false)
 const errorMessage = ref<string | null>(null)
+
+// 统一短ID生成：优先 short_id；若 id 是 URL 则取结尾；否则直接用 id
+const toShortId = (p: { id: string; short_id?: string } | null) => {
+  if (!p) return ''
+  if (p.short_id) return p.short_id
+  const raw = p.id || ''
+  if (!raw) return ''
+  if (raw.includes('openalex.org/')) {
+    const seg = raw.replace(/\/$/, '').split('/')
+    return seg[seg.length - 1]
+  }
+  return raw
+}
 
 const fetchPaper = async () => {
   try {
@@ -259,6 +272,15 @@ const goBack = () => {
 
 onMounted(() => {
   fetchPaper()
+})
+
+// 监听路由参数变化（同一路由复用组件时不会重新挂载）
+watch(() => route.params.id as string, async (newId, oldId) => {
+  if (newId && newId !== oldId) {
+    await fetchPaper()
+    // 切换论文后回到顶部
+    window.scrollTo({ top: 0 })
+  }
 })
 </script>
 

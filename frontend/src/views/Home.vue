@@ -63,7 +63,7 @@
         
         <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
           <div v-for="feature in features" :key="feature.title" class="card-hover p-6 text-center">
-            <div class="w-16 h-16 mx-auto mb-4 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full flex items-center justify-center">
+            <div class="w-16 h-16 mx-auto mb-4 rounded-full flex items-center justify-center bg-blue-600 dark:bg-blue-500">
               <component :is="feature.icon" class="w-8 h-8 text-white" />
             </div>
             <h3 class="text-xl font-semibold text-gray-900 dark:text-white mb-2">

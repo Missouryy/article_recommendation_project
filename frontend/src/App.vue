@@ -51,7 +51,7 @@
                   class="flex items-center text-sm rounded-full focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
                 >
                   <!-- 修复：使用CSS生成的头像，不依赖图片文件 -->
-                  <div class="h-8 w-8 rounded-full bg-gradient-to-r from-blue-600 to-cyan-500 text-white flex items-center justify-center text-sm font-medium shadow-soft">
+                  <div class="h-8 w-8 rounded-full bg-blue-600 dark:bg-blue-500 text-white flex items-center justify-center text-sm font-medium shadow-soft">
                     {{ userStore.userInitials || 'U' }}
                   </div>
                 </button>

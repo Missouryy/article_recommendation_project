@@ -1,44 +1,48 @@
 <template>
   <div class="citation-graph-container">
     <!-- 控制面板 -->
-    <div class="graph-controls mb-4 p-4 bg-white dark:bg-gray-800 rounded-lg shadow-sm">
+    <div class="graph-controls mb-4">
       <div class="flex flex-wrap items-center gap-4">
         <div class="flex items-center gap-2">
           <label class="text-sm font-medium text-gray-700 dark:text-gray-300">深度:</label>
-          <select 
-            v-model="graphDepth" 
-            @change="updateGraph"
-            class="px-3 py-1 border border-gray-300 dark:border-gray-600 rounded-md text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-          >
-            <option value="1">1层</option>
-            <option value="2">2层</option>
-            <option value="3">3层</option>
-          </select>
+          <div class="relative">
+            <select 
+              v-model="graphDepth" 
+              @change="updateGraph"
+              class="w-18 px-3 py-1 border border-gray-300 dark:border-gray-600 rounded-md text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            >
+              <option value="1">1层</option>
+              <option value="2">2层</option>
+              <option value="3">3层</option>
+            </select>
+          </div>
         </div>
         
         <div class="flex items-center gap-2">
           <label class="text-sm font-medium text-gray-700 dark:text-gray-300">最大节点:</label>
-          <select 
-            v-model="maxNodes" 
-            @change="updateGraph"
-            class="px-3 py-1 border border-gray-300 dark:border-gray-600 rounded-md text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-          >
-            <option value="30">30</option>
-            <option value="50">50</option>
-            <option value="100">100</option>
-          </select>
+          <div class="relative">
+            <select 
+              v-model="maxNodes" 
+              @change="updateGraph"
+              class="w-16 px-3 py-1 border border-gray-300 dark:border-gray-600 rounded-md text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            >
+              <option value="30">30</option>
+              <option value="50">50</option>
+              <option value="100">100</option>
+            </select>
+          </div>
         </div>
         
         <button 
           @click="resetZoom"
-          class="px-3 py-1 text-sm bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
+          class="btn-secondary text-sm px-3 py-1"
         >
           重置视图
         </button>
         
         <button 
           @click="toggleLayout"
-          class="px-3 py-1 text-sm bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded-md hover:bg-blue-200 dark:hover:bg-blue-800 transition-colors"
+          class="btn-primary text-sm px-3 py-1"
         >
           {{ currentLayout === 'force' ? '切换为环形布局' : '切换为力导向布局' }}
         </button>
@@ -46,7 +50,7 @@
     </div>
 
     <!-- 图例 -->
-    <div class="graph-legend mb-4 p-3 bg-white dark:bg-gray-800 rounded-lg shadow-sm">
+    <div class="graph-legend mb-4">
       <div class="flex flex-wrap items-center gap-4 text-sm">
         <div class="flex items-center gap-2">
           <div class="w-4 h-4 rounded-full bg-blue-500"></div>
@@ -54,11 +58,11 @@
         </div>
         <div class="flex items-center gap-2">
           <div class="w-4 h-4 rounded-full bg-green-500"></div>
-          <span class="text-gray-700 dark:text-gray-300">引用该论文</span>
+          <span class="text-gray-700 dark:text-gray-300">被引文献</span>
         </div>
         <div class="flex items-center gap-2">
           <div class="w-4 h-4 rounded-full bg-orange-500"></div>
-          <span class="text-gray-700 dark:text-gray-300">被该论文引用</span>
+          <span class="text-gray-700 dark:text-gray-300">参考文献</span>
         </div>
         <div class="flex items-center gap-2">
           <div class="w-4 h-4 rounded-full bg-purple-500"></div>
@@ -71,7 +75,7 @@
     <div class="relative">
       <div 
         ref="graphContainer" 
-        class="graph-container w-full h-96 bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700"
+        class="graph-container card w-full h-96"
       ></div>
 
       <!-- 高级加载进度覆盖层：半透明暗色背景 + 中央环形进度 -->
@@ -214,7 +218,7 @@ const updateGraph = async () => {
     const targetDepth = Number(graphDepth.value)
     const firstDepth = 1
     // 阶段1：先拉取 depth=1，快速渲染
-    const res1 = await fetch(`/api/papers/citation-graph?paper_id=${props.paperId}&depth=${firstDepth}&max_nodes=${maxNodes.value}`)
+    const res1 = await fetch(`/api/papers/citation-graph?paper_id=${encodeURIComponent(props.paperId)}&depth=${firstDepth}&max_nodes=${maxNodes.value}`)
     const data1: GraphData = await res1.json()
     let bestData: GraphData | null = null
     let bestCount = 0
@@ -234,7 +238,7 @@ const updateGraph = async () => {
       
       while (Date.now() < deadline) {
         try {
-          const res = await fetch(`/api/papers/citation-graph?paper_id=${props.paperId}&depth=${targetDepth}&max_nodes=${maxNodes.value}`)
+          const res = await fetch(`/api/papers/citation-graph?paper_id=${encodeURIComponent(props.paperId)}&depth=${targetDepth}&max_nodes=${maxNodes.value}`)
           const data: GraphData = await res.json()
           const count = Array.isArray(data.nodes) ? data.nodes.length : 0
           const elapsed = 1 - Math.max(0, deadline - Date.now()) / totalMs
@@ -281,6 +285,30 @@ const updateGraph = async () => {
 // 渲染图谱
 const renderGraph = (data: GraphData) => {
   if (!graphContainer.value) return
+  // 保证中心节点存在：如果缺失，注入一个最小信息的中心节点
+  const centerId = data.center_node
+  if (!Array.isArray(data.nodes) || data.nodes.length === 0 || !data.nodes.some(n => n.id === centerId)) {
+    const fallback: GraphNode = {
+      id: centerId,
+      label: '中心论文',
+      type: 'paper',
+      size: 20,
+      color: '#3B82F6',
+      metadata: {
+        title: '中心论文',
+        authors: [],
+        year: 0,
+        journal: '',
+        abstract: '',
+        citation_count: 0
+      }
+    }
+    data = {
+      ...data,
+      nodes: [fallback, ...(data.nodes || [])],
+      edges: data.edges || []
+    }
+  }
   
   // 清除现有内容
   d3.select(graphContainer.value).selectAll('*').remove()
@@ -309,14 +337,14 @@ const renderGraph = (data: GraphData) => {
   const g = svg.append('g').attr('class', 'graph-group')
   
   // 处理边数据
-  const links = data.edges.map(edge => ({
+  const links = (data.edges || []).map(edge => ({
     source: edge.source,
     target: edge.target,
     weight: edge.weight
   }))
   
   // 处理节点数据：扁平化 metadata，避免模板读取字段时未定义
-  const nodes = data.nodes.map(node => ({
+  const nodes = (data.nodes || []).map(node => ({
     ...node,
     ...(node as any).metadata,
     x: Math.random() * width,
@@ -327,7 +355,7 @@ const renderGraph = (data: GraphData) => {
   g.append('defs').selectAll('marker')
     .data(['citation'])
     .enter().append('marker')
-    .attr('id', d => d)
+    .attr('id', (d: any) => d)
     .attr('viewBox', '0 -5 10 10')
     .attr('refX', 20)
     .attr('refY', 0)
@@ -345,7 +373,7 @@ const renderGraph = (data: GraphData) => {
     .enter().append('line')
     .attr('stroke', '#999')
     .attr('stroke-opacity', 0.6)
-    .attr('stroke-width', d => Math.sqrt(d.weight) * 2)
+    .attr('stroke-width', (d: any) => Math.sqrt(d.weight) * 2)
     .attr('marker-end', 'url(#citation)')
   
   // 创建节点
@@ -359,21 +387,21 @@ const renderGraph = (data: GraphData) => {
       .on('drag', dragged)
       .on('end', dragended)
     )
-    .on('click', (event, d) => showPaperDetail(d))
+    .on('click', (_event: any, d: any) => showPaperDetail(d))
   
   // 添加节点圆圈
   node.append('circle')
-    .attr('r', d => d.size)
-    .attr('fill', d => d.color)
+    .attr('r', (d: any) => d.size)
+    .attr('fill', (d: any) => d.color)
     .attr('stroke', '#fff')
     .attr('stroke-width', 2)
     .attr('stroke-opacity', 0.8)
   
   // 添加节点标签
   node.append('text')
-    .text(d => truncateLabel(d.label, 10))
+    .text((d: any) => truncateLabel(d.label, 10))
     .attr('text-anchor', 'middle')
-    .attr('dy', d => d.size + 15)
+    .attr('dy', (d: any) => d.size + 15)
     .attr('font-size', '10px')
     .attr('fill', '#333')
     .attr('pointer-events', 'none')
@@ -383,7 +411,7 @@ const renderGraph = (data: GraphData) => {
     .force('link', d3.forceLink(links).id((d: any) => d.id).distance(100))
     .force('charge', d3.forceManyBody().strength(-300))
     .force('center', d3.forceCenter(width / 2, height / 2))
-    .force('collision', d3.forceCollide().radius(d => (d as any).size + 5))
+    .force('collision', d3.forceCollide().radius((d: any) => d.size + 5))
   
   // 更新位置
   simulation.on('tick', () => {
