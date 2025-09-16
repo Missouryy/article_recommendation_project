@@ -1,10 +1,16 @@
 <template>
   <div class="min-h-screen bg-gray-50 dark:bg-gray-900">
     <div v-if="author" class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <!-- 返回按钮（卡片外） -->
+      <button @click="goBack" class="mb-6 btn-secondary flex items-center gap-2 hover:bg-gray-300 dark:hover:bg-gray-500 transition-colors">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/></svg>
+        返回
+      </button>
+
       <!-- 作者信息 -->
       <div class="card p-8 mb-8">
         <div class="flex items-start space-x-6">
-          <div class="w-24 h-24 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full flex items-center justify-center">
+          <div class="w-24 h-24 bg-blue-600 rounded-full flex items-center justify-center">
             <span class="text-white font-bold text-2xl">
               {{ getInitials(author?.name || '') }}
             </span>
@@ -19,11 +25,7 @@
               {{ author?.affiliation }}
             </p>
             
-            <div class="grid grid-cols-3 gap-6 mb-6">
-              <div class="text-center">
-                <div class="text-2xl font-bold text-blue-600 dark:text-blue-400">{{ author?.h_index }}</div>
-                <div class="text-sm text-gray-500">H指数</div>
-              </div>
+            <div class="grid grid-cols-2 gap-6 mb-6">
               <div class="text-center">
                 <div class="text-2xl font-bold text-blue-600 dark:text-blue-400">{{ author?.citation_count }}</div>
                 <div class="text-sm text-gray-500">引用数</div>
@@ -71,7 +73,11 @@
       <!-- 代表作品 -->
       <div class="card p-6 mb-8">
         <h2 class="text-xl font-semibold text-gray-900 dark:text-white mb-4">代表作品</h2>
-        <div v-if="papers.length > 0" class="space-y-4">
+        <div v-if="papersLoading" class="text-center py-8">
+          <div class="spinner mx-auto"></div>
+          <p class="text-gray-500 dark:text-gray-400 mt-3">加载论文列表...</p>
+        </div>
+        <div v-else-if="papers.length > 0" class="space-y-4">
           <div
             v-for="paper in papers"
             :key="paper.id"
@@ -111,6 +117,7 @@ const userStore = useUserStore()
 
 const author = ref<Author | null>(null)
 const papers = ref<Paper[]>([])
+const papersLoading = ref(false)
 const loading = ref(false)
 const isFollowing = ref(false)
 
@@ -127,13 +134,17 @@ const fetchAuthor = async () => {
   try {
     loading.value = true
     const authorId = route.params.id as string
-    const [authorRes, papersRes] = await Promise.all([
-      api.authors.get(authorId),
-      api.authors.papers(authorId, { limit: 10, sort_by: 'citation', order: 'desc' })
-    ])
 
+    // 先拿作者信息，先展示主体信息
+    const authorRes = await api.authors.get(authorId)
     author.value = authorRes.data
-    papers.value = papersRes.data
+
+    // 并行或延后获取论文列表，单独 loading
+    papersLoading.value = true
+    api.authors.papers(authorId, { limit: 10, sort_by: 'citation', order: 'desc' })
+      .then(res => { papers.value = res.data })
+      .catch(() => { papers.value = [] })
+      .finally(() => { papersLoading.value = false })
 
     // 判断当前用户是否已关注该学者
     if (userStore.isAuthenticated) {
@@ -177,6 +188,15 @@ const toggleFollow = async () => {
     }
   } catch (error) {
     console.error('关注操作失败:', error)
+  }
+}
+
+const goBack = () => {
+  if (window.history.length > 1) {
+    window.history.back()
+  } else {
+    // 无历史记录则回到学者库
+    window.location.href = '/authors'
   }
 }
 

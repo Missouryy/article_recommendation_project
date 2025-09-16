@@ -117,7 +117,7 @@ const notification = ref({
 })
 
 // 创建一个 ref 来动态控制 keep-alive 列表
-const keepAliveInclude = ref(['Search', 'Papers'])
+const keepAliveInclude = ref(['Search', 'Papers', 'Authors'])
 
 const isDark = computed(() => themeStore.isDark)
 

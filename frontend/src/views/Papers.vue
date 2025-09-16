@@ -37,6 +37,21 @@
         <div class="spinner mx-auto"></div>
         <p class="text-gray-500 dark:text-gray-400 mt-4">加载中...</p>
       </div>
+
+      <!-- 分页控制 -->
+      <div class="mt-10 flex items-center justify-center space-x-4">
+        <button
+          @click="prevPage"
+          :disabled="page <= 1 || loading"
+          class="h-12 px-6 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-base font-bold shadow-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+        >上一页</button>
+        <span class="text-gray-700 dark:text-gray-300">第 {{ page }} 页</span>
+        <button
+          @click="nextPage"
+          :disabled="loading || papers.length < pageSize"
+          class="h-12 px-6 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-base font-bold shadow-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+        >下一页</button>
+      </div>
     </div>
   </div>
 </template>
@@ -53,6 +68,8 @@ const loading = ref(false)
 const router = useRouter()
 
 let lastScrollTop = 0
+const page = ref(1)
+const pageSize = ref(20)
 
 const goToDetail = (short_id: string) => {
   lastScrollTop = window.scrollY
@@ -69,7 +86,8 @@ const fetchPapers = async () => {
   try {
     loading.value = true
     const response = await api.papers.list({
-      limit: 20,
+      limit: pageSize.value,
+      offset: (page.value - 1) * pageSize.value,
       sort_by: 'date',
       order: 'desc'
     })
@@ -79,6 +97,20 @@ const fetchPapers = async () => {
   } finally {
     loading.value = false
   }
+}
+
+const nextPage = async () => {
+  if (loading.value) return
+  page.value += 1
+  await fetchPapers()
+  window.scrollTo(0, 0)
+}
+
+const prevPage = async () => {
+  if (loading.value || page.value <= 1) return
+  page.value -= 1
+  await fetchPapers()
+  window.scrollTo(0, 0)
 }
 
 onMounted(() => {

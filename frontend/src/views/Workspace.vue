@@ -101,10 +101,10 @@
           </div>
         </div>
 
-        <!-- 右侧：关注的学者 -->
+        <!-- 右侧：关注学者 -->
         <div class="space-y-8">
           <div class="card p-6">
-            <h2 class="text-xl font-semibold text-gray-900 dark:text-white mb-4">关注的学者</h2>
+            <h2 class="text-xl font-semibold text-gray-900 dark:text-white mb-4">关注学者</h2>
             
             <!-- 加载状态 -->
             <div v-if="loading" class="space-y-4">
@@ -126,7 +126,7 @@
                 @click="$router.push(`/authors/${author.id}`)"
               >
                 <div class="flex items-center space-x-3">
-                  <div class="w-10 h-10 bg-blue-600 rounded-full flex items-center justify-center">
+                  <div class="w-10 h-10 bg-blue-600 rounded-full flex items-center justify-center shrink-0">
                     <span class="text-white font-bold text-sm">
                       {{ getInitials(author.name) }}
                     </span>
@@ -139,7 +139,7 @@
               </div>
             </div>
             
-            <p v-else class="text-gray-500 dark:text-gray-400">暂无关注的学者</p>
+            <p v-else class="text-gray-500 dark:text-gray-400">暂无关注学者</p>
           </div>
         </div>
       </div>

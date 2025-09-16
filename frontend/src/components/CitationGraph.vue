@@ -147,7 +147,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, watch } from 'vue'
+import { ref, onMounted, onUnmounted, onActivated, nextTick, watch } from 'vue'
 import * as d3 from 'd3'
 
 interface GraphNode {
@@ -200,6 +200,8 @@ const loadProgress = ref(0)
 let svg: any = null
 let simulation: any = null
 let zoom: any = null
+let latestData: GraphData | null = null
+let resizeObserver: ResizeObserver | null = null
 
 // 监听paperId变化
 watch(() => props.paperId, (newId) => {
@@ -223,7 +225,12 @@ const updateGraph = async () => {
     // 无论 nodes 是否为空，先渲染一次：renderGraph 内部会保障中心节点存在
     let bestData: GraphData | null = data1
     let bestCount = Array.isArray(data1.nodes) ? data1.nodes.length : 0
-    renderGraph(data1)
+    // 若容器尚未有尺寸，延迟到尺寸就绪时再渲染
+    if (isContainerReady()) {
+      renderGraph(data1)
+    } else {
+      latestData = data1
+    }
     loadProgress.value = targetDepth > 1 ? 30 : 100
 
     // 阶段2：轮询目标深度，直到节点数增长或超时
@@ -247,7 +254,11 @@ const updateGraph = async () => {
             noProgressCount = 0
             bestData = data
             bestCount = count
-            renderGraph(data)
+            if (isContainerReady()) {
+              renderGraph(data)
+            } else {
+              latestData = data
+            }
           } else {
             noProgressCount++
             // 如果连续3次没有进展，提前结束
@@ -264,7 +275,11 @@ const updateGraph = async () => {
       // 最后一轮保证显示最新数据并收尾
       loadProgress.value = 100
       if (bestData) {
-        renderGraph(bestData)
+        if (isContainerReady()) {
+          renderGraph(bestData)
+        } else {
+          latestData = bestData
+        }
       }
     }
   } catch (error) {
@@ -282,6 +297,7 @@ const updateGraph = async () => {
 // 渲染图谱
 const renderGraph = (data: GraphData) => {
   if (!graphContainer.value) return
+  latestData = data
   // 保证中心节点存在：如果缺失，注入一个最小信息的中心节点
   const centerId = data.center_node
   if (!Array.isArray(data.nodes) || data.nodes.length === 0 || !data.nodes.some(n => n.id === centerId)) {
@@ -307,7 +323,10 @@ const renderGraph = (data: GraphData) => {
     }
   }
   
-  // 清除现有内容
+  // 清除现有内容和旧模拟
+  if (simulation) {
+    try { simulation.stop() } catch (_) {}
+  }
   d3.select(graphContainer.value).selectAll('*').remove()
   
   const container = graphContainer.value
@@ -422,6 +441,15 @@ const renderGraph = (data: GraphData) => {
   })
 }
 
+// 判断容器是否具有可用尺寸
+const isContainerReady = () => {
+  const el = graphContainer.value as HTMLElement | undefined
+  if (!el) return false
+  const w = el.clientWidth || 0
+  const h = el.clientHeight || 0
+  return w > 0 && h > 0
+}
+
 // 拖拽事件处理
 const dragstarted = (event: any, d: any) => {
   if (!event.active) simulation.alphaTarget(0.3).restart()
@@ -473,25 +501,41 @@ const toggleLayout = () => {
 // 组件挂载时初始化
 onMounted(() => {
   if (props.paperId) {
-    updateGraph()
+    // 等待下一帧，确保容器插入并计算尺寸
+    nextTick(() => updateGraph())
   }
   
-  // 监听窗口大小变化
-  const handleResize = () => {
-    if (graphContainer.value) {
-      updateGraph()
-    }
-  }
-  
-  window.addEventListener('resize', handleResize)
+  // 监听容器尺寸变化以重绘
+  try {
+    resizeObserver = new ResizeObserver(() => {
+      if (!graphContainer.value) return
+      if (isContainerReady() && latestData) {
+        // 防抖：下一帧再重绘，避免频繁触发
+        requestAnimationFrame(() => renderGraph(latestData as GraphData))
+      }
+    })
+    if (graphContainer.value) resizeObserver.observe(graphContainer.value)
+    window.addEventListener('resize', () => {
+      if (isContainerReady() && latestData) {
+        renderGraph(latestData as GraphData)
+      }
+    })
+  } catch (_) {}
   
   // 清理函数
   onUnmounted(() => {
-    window.removeEventListener('resize', handleResize)
+    try { resizeObserver && resizeObserver.disconnect() } catch (_) {}
     if (simulation) {
       simulation.stop()
     }
   })
+})
+
+// 被 keep-alive 激活时，若容器尺寸已就绪则重绘一次
+onActivated(() => {
+  if (isContainerReady() && latestData) {
+    renderGraph(latestData as GraphData)
+  }
 })
 </script>
 
