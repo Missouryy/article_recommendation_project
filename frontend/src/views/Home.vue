@@ -63,8 +63,8 @@
         
         <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
           <div v-for="feature in features" :key="feature.title" class="card-hover p-6 text-center">
-            <div class="w-16 h-16 mx-auto mb-4 rounded-full flex items-center justify-center bg-blue-600 dark:bg-blue-500">
-              <component :is="feature.icon" class="w-8 h-8 text-white" />
+            <div class="w-16 h-16 mx-auto mb-4 rounded-full flex items-center justify-center bg-blue-100 dark:bg-blue-900">
+              <span class="text-3xl">{{ feature.icon }}</span>
             </div>
             <h3 class="text-xl font-semibold text-gray-900 dark:text-white mb-2">
               {{ feature.title }}
@@ -167,13 +167,13 @@ import { useRouter } from 'vue-router'
 import { useUserStore } from '@/stores/user'
 import { api } from '@/services/api'
 
-// Icons (简化处理，实际项目中可以使用图标库)
-const SearchIcon = 'div'
-const ChartBarIcon = 'div'
-const UserGroupIcon = 'div'
-const AcademicCapIcon = 'div'
-const SparklesIcon = 'div'
-const CpuChipIcon = 'div'
+// Icons - 使用 Unicode 符号图标
+const SearchIcon = '🔍'
+const ChartBarIcon = '📈'
+const UserGroupIcon = '👥'
+const AcademicCapIcon = '🎓'
+const SparklesIcon = '✨'
+const CpuChipIcon = '⚙️'
 
 const router = useRouter()
 const userStore = useUserStore()
@@ -216,7 +216,7 @@ const features = ref([
 ])
 
 const stats = ref([
-  { value: '10K+', label: '论文数量' },
+  { value: '2000K+', label: '论文数量' },
   { value: '2K+', label: '活跃学者' },
   { value: '500+', label: '研究机构' },
   { value: '50+', label: '研究领域' }

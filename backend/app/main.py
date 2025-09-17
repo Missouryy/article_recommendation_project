@@ -11,7 +11,7 @@ import asyncio
 import logging
 
 # 导入API路由
-from .api import auth, search, papers, authors, workspace, ai_assistant, recommendations, truth_value
+from .api import auth, search, papers, authors, workspace, ai_assistant, recommendations, truth_value, ai_summary
 
 # 配置日志，减少uvicorn的重载警告
 logging.getLogger("uvicorn.error").setLevel(logging.ERROR)
@@ -139,6 +139,7 @@ app.include_router(papers.router, prefix="/api")
 app.include_router(authors.router, prefix="/api")
 app.include_router(workspace.router, prefix="/api")
 app.include_router(ai_assistant.router, prefix="/api")
+app.include_router(ai_summary.router, prefix="/api")
 app.include_router(recommendations.router, prefix="/api")
 app.include_router(truth_value.router, prefix="/api")
 

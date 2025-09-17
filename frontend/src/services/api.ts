@@ -141,6 +141,13 @@ export const api = {
     capabilities: () => apiClient.get('/ai-assistant/capabilities'),
   },
 
+  // AI总结相关 (Gemini API)
+  aiSummary: {
+    getSummary: (paperId: string) => apiClient.get(`/ai/summary/${paperId}`),
+    getAnalysis: (paperId: string) => apiClient.get(`/ai/analysis/${paperId}`),
+    getStatus: () => apiClient.get('/ai/status'),
+  },
+
   // 智能推荐相关
   recommendations: {
     getPersonalized: (params?: any) => apiClient.get('/recommendations/', { params }),

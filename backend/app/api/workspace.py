@@ -1,6 +1,7 @@
 """
 个人工作台API接口
 """
+import sqlite3
 from typing import List, Optional
 from fastapi import APIRouter, HTTPException, Depends, Query
 from ..models.user import User, Folder, FolderCreate, UserStats, Recommendation
@@ -12,26 +13,80 @@ from ..algorithms.recommender import get_daily_recommendations
 
 router = APIRouter(prefix="/workspace", tags=["个人工作台"])
 
+def get_author_from_db(author_name: str) -> Optional[dict]:
+    """
+    从 author_db.db 获取作者信息
+    """
+    try:
+        import os
+        # 获取项目根目录的绝对路径
+        current_file = os.path.abspath(__file__)
+        project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(current_file))))
+        db_path = os.path.join(project_root, 'author_db.db')
+        
+        print(f"[DEBUG] 数据库路径: {db_path}")
+        print(f"[DEBUG] 数据库文件存在: {os.path.exists(db_path)}")
+        
+        conn = sqlite3.connect(db_path)
+        cursor = conn.cursor()
+        
+        # 使用 LIKE 查询匹配作者姓名
+        cursor.execute("""
+            SELECT openalex_id, display_name, orcid, institution, research_areas, 
+                   cited_by_count, works_count, first_publication_year, last_publication_year
+            FROM authors 
+            WHERE display_name LIKE ? 
+            LIMIT 1
+        """, (f"%{author_name}%",))
+        
+        result = cursor.fetchone()
+        conn.close()
+        
+        if result:
+            return {
+                "id": result[0],  # openalex_id
+                "name": result[1],  # display_name
+                "orcid": result[2],  # orcid
+                "affiliation": result[3],  # institution
+                "research_areas": result[4].split(', ') if result[4] else [],  # research_areas
+                "citation_count": result[5] or 0,  # cited_by_count
+                "paper_count": result[6] or 0,  # works_count
+                "first_publication_year": result[7],  # first_publication_year
+                "last_publication_year": result[8],  # last_publication_year
+                "h_index": 0  # 暂时设为0，因为数据库中没有h_index字段
+            }
+        return None
+    except Exception as e:
+        print(f"从 author_db.db 获取作者信息失败: {e}")
+        return None
+
 @router.get("/dashboard", summary="获取工作台概览")
 async def get_workspace_dashboard(current_user: User = Depends(get_current_user)):
     """
     获取个人工作台的概览信息
     """
+    print(f"[DEBUG] 开始获取工作台数据，用户ID: {current_user.id}")
+    
     user_data = await user_manager.get_user_by_id(current_user.id)
+    print(f"[DEBUG] 用户数据: {user_data}")
     if not user_data:
         raise HTTPException(status_code=404, detail="用户不存在")
     
     # 获取用户的收藏论文
     bookmarked_papers = await user_manager.get_user_bookmarks(current_user.id)
+    print(f"[DEBUG] 收藏论文ID列表: {bookmarked_papers}")
     
     # 获取用户的文件夹
     user_folders = await user_manager.get_user_folders(current_user.id)
+    print(f"[DEBUG] 用户文件夹: {user_folders}")
     
     # 获取关注的作者
     followed_authors = await user_manager.get_followed_authors(current_user.id)
+    print(f"[DEBUG] 关注的作者ID列表: {followed_authors}")
     
     # 获取阅读历史
     reading_history = await user_manager.get_reading_history(current_user.id, limit=50)
+    print(f"[DEBUG] 阅读历史ID列表: {reading_history}")
     
     # 统计信息
     stats = UserStats(
@@ -40,11 +95,15 @@ async def get_workspace_dashboard(current_user: User = Depends(get_current_user)
         followed_authors_count=len(followed_authors),
         reading_history_count=len(reading_history)
     )
+    print(f"[DEBUG] 统计信息: {stats}")
     
     # 最近收藏的论文
     recent_bookmarks = []
+    print(f"[DEBUG] 开始处理最近收藏的论文，共{len(bookmarked_papers)}篇")
     for paper_id in bookmarked_papers[-5:]:  # 最近5篇
+        print(f"[DEBUG] 处理论文ID: {paper_id}")
         paper = await db.get_paper_by_id(paper_id)
+        print(f"[DEBUG] 论文详情: {paper}")
         if paper:
             summary = PaperSummary(
                 id=paper["id"],
@@ -58,13 +117,21 @@ async def get_workspace_dashboard(current_user: User = Depends(get_current_user)
                 research_field=paper["research_field"]
             )
             recent_bookmarks.append(summary)
+            print(f"[DEBUG] 添加论文摘要: {summary}")
+        else:
+            print(f"[DEBUG] 论文ID {paper_id} 未找到")
+    print(f"[DEBUG] 最近收藏论文数量: {len(recent_bookmarks)}")
     
     # 关注的作者
     followed_authors_info = []
+    print(f"[DEBUG] 开始处理关注的作者，共{len(followed_authors)}个")
     for author_id in followed_authors:
+        print(f"[DEBUG] 处理作者ID: {author_id}")
         # 从作者ID中提取作者姓名并获取信息
         author_name = author_id.replace("author_", "").replace("_", " ")
-        author = await db.get_author_info(author_name)
+        print(f"[DEBUG] 提取的作者姓名: {author_name}")
+        author = get_author_from_db(author_name)
+        print(f"[DEBUG] 作者详情: {author}")
         if author:
             summary = AuthorSummary(
                 id=author["id"],
@@ -76,26 +143,36 @@ async def get_workspace_dashboard(current_user: User = Depends(get_current_user)
                 paper_count=author["paper_count"]
             )
             followed_authors_info.append(summary)
+            print(f"[DEBUG] 添加作者摘要: {summary}")
+        else:
+            print(f"[DEBUG] 作者 {author_name} 未找到")
+    print(f"[DEBUG] 关注作者数量: {len(followed_authors_info)}")
     
     # 获取推荐列表
+    print(f"[DEBUG] 开始获取推荐列表")
     try:
         from .recommendations import recommender
         recommendations = await recommender.get_daily_recommendations(
             user_id=current_user.id,
             limit=5
         )
+        print(f"[DEBUG] 推荐列表: {recommendations}")
     except Exception as e:
         # 如果推荐失败，返回空列表
+        print(f"[DEBUG] 获取推荐失败: {str(e)}")
         recommendations = []
 
-    
-    return {
+    # 构建最终返回结果
+    result = {
         "user_stats": stats,
         "recent_bookmarks": recent_bookmarks,
         "followed_authors": followed_authors_info,
         "recommendations": recommendations,
         "last_updated": user_data.get("last_login")
     }
+    print(f"[DEBUG] 最终返回结果: {result}")
+    
+    return result
 
 @router.get("/bookmarks", response_model=List[PaperSummary], summary="获取收藏的论文")
 async def get_bookmarked_papers(
@@ -349,7 +426,7 @@ async def get_followed_authors(current_user: User = Depends(get_current_user)):
     for author_id in followed_authors:
         # 从作者ID中提取作者姓名并获取信息
         author_name = author_id.replace("author_", "").replace("_", " ")
-        author = await db.get_author_info(author_name)
+        author = get_author_from_db(author_name)
         if author:
             summary = AuthorSummary(
                 id=author["id"],

@@ -680,13 +680,20 @@ class UserManager:
     
     async def get_user_by_id(self, user_id: str) -> Dict[str, Any] | None:
         """根据ID获取用户"""
+        print(f"[DEBUG] 用户管理器 - 获取用户信息，用户ID: {user_id}")
         db = await self.connection.get_connection()
         try:
             query = "SELECT * FROM users WHERE id = ?"
+            print(f"[DEBUG] 执行SQL查询: {query}")
+            print(f"[DEBUG] 查询参数: user_id={user_id}")
             async with db.execute(query, (user_id,)) as cursor:
                 row = await cursor.fetchone()
+                print(f"[DEBUG] 查询结果: {row}")
                 if row:
-                    return self._format_user_data(row)
+                    user_data = self._format_user_data(row)
+                    print(f"[DEBUG] 格式化后的用户数据: {user_data}")
+                    return user_data
+                print(f"[DEBUG] 用户不存在")
                 return None
         finally:
             await db.close()
@@ -816,6 +823,7 @@ class UserManager:
     
     async def get_user_bookmarks(self, user_id: str) -> List[str]:
         """获取用户收藏的论文ID列表"""
+        print(f"[DEBUG] 数据库查询 - 获取用户收藏，用户ID: {user_id}")
         db = await self.connection.get_connection()
         try:
             query = """
@@ -823,9 +831,15 @@ class UserManager:
                 WHERE user_id = ? 
                 ORDER BY created_at DESC
             """
+            print(f"[DEBUG] 执行SQL查询: {query}")
+            print(f"[DEBUG] 查询参数: user_id={user_id}")
             async with db.execute(query, (user_id,)) as cursor:
                 rows = await cursor.fetchall()
-                return [row[0] for row in rows]
+                print(f"[DEBUG] 查询结果行数: {len(rows)}")
+                print(f"[DEBUG] 查询结果: {rows}")
+                result = [row[0] for row in rows]
+                print(f"[DEBUG] 返回的论文ID列表: {result}")
+                return result
         finally:
             await db.close()
     
@@ -870,6 +884,7 @@ class UserManager:
     
     async def get_followed_authors(self, user_id: str) -> List[str]:
         """获取关注的作者ID列表"""
+        print(f"[DEBUG] 数据库查询 - 获取关注作者，用户ID: {user_id}")
         db = await self.connection.get_connection()
         try:
             query = """
@@ -877,9 +892,15 @@ class UserManager:
                 WHERE user_id = ? 
                 ORDER BY created_at DESC
             """
+            print(f"[DEBUG] 执行SQL查询: {query}")
+            print(f"[DEBUG] 查询参数: user_id={user_id}")
             async with db.execute(query, (user_id,)) as cursor:
                 rows = await cursor.fetchall()
-                return [row[0] for row in rows]
+                print(f"[DEBUG] 查询结果行数: {len(rows)}")
+                print(f"[DEBUG] 查询结果: {rows}")
+                result = [row[0] for row in rows]
+                print(f"[DEBUG] 返回的作者ID列表: {result}")
+                return result
         finally:
             await db.close()
     
@@ -899,6 +920,7 @@ class UserManager:
     
     async def get_reading_history(self, user_id: str, limit: int = 50) -> List[str]:
         """获取阅读历史"""
+        print(f"[DEBUG] 数据库查询 - 获取阅读历史，用户ID: {user_id}, 限制: {limit}")
         db = await self.connection.get_connection()
         try:
             query = """
@@ -907,9 +929,15 @@ class UserManager:
                 ORDER BY created_at DESC 
                 LIMIT ?
             """
+            print(f"[DEBUG] 执行SQL查询: {query}")
+            print(f"[DEBUG] 查询参数: user_id={user_id}, limit={limit}")
             async with db.execute(query, (user_id, limit)) as cursor:
                 rows = await cursor.fetchall()
-                return [row[0] for row in rows]
+                print(f"[DEBUG] 查询结果行数: {len(rows)}")
+                print(f"[DEBUG] 查询结果: {rows}")
+                result = [row[0] for row in rows]
+                print(f"[DEBUG] 返回的阅读历史ID列表: {result}")
+                return result
         finally:
             await db.close()
     
@@ -985,6 +1013,7 @@ class UserManager:
     
     async def get_user_folders(self, user_id: str) -> List[Dict[str, Any]]:
         """获取用户的收藏夹列表"""
+        print(f"[DEBUG] 数据库查询 - 获取用户文件夹，用户ID: {user_id}")
         db = await self.connection.get_connection()
         try:
             query = """
@@ -995,11 +1024,15 @@ class UserManager:
                 GROUP BY uf.id
                 ORDER BY uf.created_at DESC
             """
+            print(f"[DEBUG] 执行SQL查询: {query}")
+            print(f"[DEBUG] 查询参数: user_id={user_id}")
             async with db.execute(query, (user_id,)) as cursor:
                 rows = await cursor.fetchall()
+                print(f"[DEBUG] 查询结果行数: {len(rows)}")
+                print(f"[DEBUG] 查询结果: {rows}")
                 folders = []
                 for row in rows:
-                    folders.append({
+                    folder = {
                         "id": row[0],
                         "user_id": row[1],
                         "name": row[2],
@@ -1007,7 +1040,10 @@ class UserManager:
                         "created_at": row[4],
                         "updated_at": row[5],
                         "paper_count": row[6]
-                    })
+                    }
+                    folders.append(folder)
+                    print(f"[DEBUG] 添加文件夹: {folder}")
+                print(f"[DEBUG] 返回的文件夹列表: {folders}")
                 return folders
         finally:
             await db.close()

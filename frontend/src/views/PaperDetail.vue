@@ -61,7 +61,7 @@
         </div>
 
         <!-- 操作按钮 -->
-        <div class="flex gap-4">
+        <div class="flex flex-wrap gap-4">
           <button
             @click="toggleBookmark"
             :class="[
@@ -79,6 +79,14 @@
           >
             {{ summaryLoading ? '生成中...' : 'AI总结' }}
           </button>
+          
+          <button
+            @click="generateAnalysis"
+            :disabled="analysisLoading"
+            class="btn-secondary hover:-translate-y-0.5"
+          >
+            {{ analysisLoading ? '分析中...' : '质量分析' }}
+          </button>
         </div>
       </div>
 
@@ -86,6 +94,12 @@
       <div v-if="aiSummary" class="card p-6 mb-8 animate-slide-in">
         <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-3">AI总结</h3>
         <p class="text-gray-700 dark:text-gray-300">{{ aiSummary.content }}</p>
+      </div>
+
+      <!-- AI质量分析 -->
+      <div v-if="aiAnalysis" class="card p-6 mb-8 animate-slide-in">
+        <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-3">AI质量分析</h3>
+        <p class="text-gray-700 dark:text-gray-300">{{ aiAnalysis.content }}</p>
       </div>
 
       <!-- 引用和参考文献 -->
@@ -158,8 +172,10 @@ const paper = ref<Paper | null>(null)
 const references = ref<Paper[]>([])
 const citations = ref<Paper[]>([])
 const aiSummary = ref<{ content: string } | null>(null)
+const aiAnalysis = ref<{ content: string } | null>(null)
 const loading = ref(false)
 const summaryLoading = ref(false)
+const analysisLoading = ref(false)
 const isBookmarked = ref(false)
 const errorMessage = ref<string | null>(null)
 
@@ -251,12 +267,55 @@ const generateSummary = async () => {
   try {
     summaryLoading.value = true
     const paperId = route.params.id as string
-    const response = await api.ai.summarize(paperId)
-    aiSummary.value = response.data
-  } catch (error) {
+    
+    // 首先检查 AI 服务状态
+    const statusResponse = await api.aiSummary.getStatus()
+    if (!statusResponse.data.ai_service_available) {
+      throw new Error('AI 服务暂不可用，请检查 Gemini API 配置')
+    }
+    
+    // 调用 Gemini API 进行总结
+    const response = await api.aiSummary.getSummary(paperId)
+    if (response.data.success) {
+      aiSummary.value = { content: response.data.summary }
+    } else {
+      throw new Error(response.data.error || 'AI 总结失败')
+    }
+  } catch (error: any) {
     console.error('生成总结失败:', error)
+    // 显示错误信息给用户
+    const errorMsg = error.response?.data?.detail || error.message || '生成总结失败，请稍后重试'
+    alert(`AI 总结失败: ${errorMsg}`)
   } finally {
     summaryLoading.value = false
+  }
+}
+
+const generateAnalysis = async () => {
+  try {
+    analysisLoading.value = true
+    const paperId = route.params.id as string
+    
+    // 首先检查 AI 服务状态
+    const statusResponse = await api.aiSummary.getStatus()
+    if (!statusResponse.data.ai_service_available) {
+      throw new Error('AI 服务暂不可用，请检查 Gemini API 配置')
+    }
+    
+    // 调用 Gemini API 进行质量分析
+    const response = await api.aiSummary.getAnalysis(paperId)
+    if (response.data.success) {
+      aiAnalysis.value = { content: response.data.analysis }
+    } else {
+      throw new Error(response.data.error || 'AI 分析失败')
+    }
+  } catch (error: any) {
+    console.error('生成分析失败:', error)
+    // 显示错误信息给用户
+    const errorMsg = error.response?.data?.detail || error.message || '生成分析失败，请稍后重试'
+    alert(`AI 分析失败: ${errorMsg}`)
+  } finally {
+    analysisLoading.value = false
   }
 }
 

@@ -368,6 +368,9 @@ Temporary Items
 
 *.db
 !truth_value_calculation/openalex_5000_v1_graded.db
+!author_db.db
+!truth_value_calculation/openalex_1000_graded.db
+!truth_value_calculation/truth_agg_text_model.pt
 *.sqlite
 *.sqlite3
 *.db-journal

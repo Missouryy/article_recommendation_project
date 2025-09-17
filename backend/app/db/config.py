@@ -159,3 +159,7 @@ class DatabaseConfig:
 # 全局配置实例
 db_config = DatabaseConfig()
 
+def get_database_config() -> Dict[str, Any]:
+    """获取数据库配置字典"""
+    return db_config._config
+

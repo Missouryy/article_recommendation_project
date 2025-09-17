@@ -176,18 +176,39 @@ const getInitials = (name: string) => {
 const fetchDashboard = async () => {
   try {
     loading.value = true
+    console.log('[DEBUG] 开始获取工作台数据')
+    
     const [dashboardRes, recommendationsRes] = await Promise.all([
       api.workspace.dashboard(),
       api.workspace.recommendations({ limit: 5 })
     ])
     
+    console.log('[DEBUG] 工作台API响应:', dashboardRes.data)
+    console.log('[DEBUG] 推荐API响应:', recommendationsRes.data)
+    
     const dashboard = dashboardRes.data
+    console.log('[DEBUG] 解析后的工作台数据:', dashboard)
+    
     stats.value = dashboard.user_stats
+    console.log('[DEBUG] 设置统计信息:', stats.value)
+    
     recentBookmarks.value = dashboard.recent_bookmarks
+    console.log('[DEBUG] 设置最近收藏:', recentBookmarks.value)
+    
     followedAuthors.value = dashboard.followed_authors
+    console.log('[DEBUG] 设置关注作者:', followedAuthors.value)
+    
     recommendations.value = recommendationsRes.data.recommendations
-  } catch (error) {
-    console.error('获取工作台数据失败:', error)
+    console.log('[DEBUG] 设置推荐列表:', recommendations.value)
+    
+    console.log('[DEBUG] 最终状态值:')
+    console.log('  - stats:', stats.value)
+    console.log('  - recentBookmarks:', recentBookmarks.value)
+    console.log('  - followedAuthors:', followedAuthors.value)
+    console.log('  - recommendations:', recommendations.value)
+  } catch (error: any) {
+    console.error('[DEBUG] 获取工作台数据失败:', error)
+    console.error('[DEBUG] 错误详情:', error.response?.data)
   } finally {
     loading.value = false
   }
