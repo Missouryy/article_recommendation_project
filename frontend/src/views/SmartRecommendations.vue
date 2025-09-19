@@ -67,6 +67,18 @@
         </nav>
       </div>
 
+      <!-- 过滤控制（仅日常/喜好推荐显示） -->
+      <div v-if="(activeTab === 'daily' || activeTab === 'preference')" class="mb-6 flex items-center gap-6">
+        <label class="inline-flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
+          <input type="checkbox" v-model="excludeHistory" class="rounded border-gray-300 dark:border-gray-600">
+          屏蔽历史阅读
+        </label>
+        <label class="inline-flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
+          <input type="checkbox" v-model="excludeBookmarked" class="rounded border-gray-300 dark:border-gray-600">
+          屏蔽已收藏
+        </label>
+      </div>
+
       <!-- 热门主题标签 -->
       <div v-if="(activeTab === 'daily' || activeTab === 'preference') && trendingTopics.length > 0" class="mb-8">
         <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">热门研究主题</h3>
@@ -108,7 +120,7 @@
       </div>
 
       <!-- 推荐结果 -->
-      <div v-else-if="recommendations.length > 0">
+      <div v-else-if="filteredRecommendations.length > 0">
         <!-- 推荐摘要信息 -->
         <div
             v-if="activeTab !== 'truth'"
@@ -128,7 +140,7 @@
         <!-- 论文列表 -->
         <div class="space-y-6">
           <div
-            v-for="(paper, index) in recommendations"
+            v-for="(paper, index) in filteredRecommendations"
             :key="paper.paper_id"
             class="card card-hover animate-slide-in"
           >
@@ -446,6 +458,21 @@ const trendingTopics = ref<any[]>([])
 const stats = ref<any>(null)
 const showStats = ref(false)
 const activeTab = ref('daily')
+// 过滤控制
+const excludeHistory = ref(false)
+const excludeBookmarked = ref(false)
+
+// 过滤后的推荐列表
+const filteredRecommendations = computed(() => {
+  if (activeTab.value !== 'daily' && activeTab.value !== 'preference') {
+    return recommendations.value
+  }
+  return (recommendations.value || []).filter((p: any) => {
+    if (excludeHistory.value && p.from_history) return false
+    if (excludeBookmarked.value && p.is_bookmarked) return false
+    return true
+  })
+})
 
 // 标签页配置
 const tabs = [
@@ -482,6 +509,13 @@ watch(showStats, (show) => {
   }
 })
 
+// 监听过滤参数变化
+watch([excludeHistory, excludeBookmarked], () => {
+  if (activeTab.value === 'daily' || activeTab.value === 'preference') {
+    loadRecommendations()
+  }
+})
+
 // 方法
 const loadRecommendations = async () => {
   if (!userStore.isAuthenticated && (activeTab.value === 'daily' || activeTab.value === 'preference')) {
@@ -497,12 +531,16 @@ const loadRecommendations = async () => {
     if (activeTab.value === 'daily') {
       response = await api.recommendations.getDaily({
         limit: 20,
-        include_reasons: true
+        include_reasons: true,
+        exclude_history: excludeHistory.value,
+        exclude_bookmarked: excludeBookmarked.value,
       })
     } else if (activeTab.value === 'preference') {
       response = await api.recommendations.getPreference({
         limit: 20,
-        include_reasons: true
+        include_reasons: true,
+        exclude_history: excludeHistory.value,
+        exclude_bookmarked: excludeBookmarked.value,
       })
     } else if (activeTab.value === 'popular') {
       response = await api.recommendations.getPopular({
@@ -529,7 +567,12 @@ const loadRecommendations = async () => {
     }
     
     if (activeTab.value !== 'truth' && response) {
-      recommendations.value = response.data || []
+      const list = response.data || []
+      recommendations.value = list.map((it: any) => ({
+        ...it,
+        from_history: Boolean(it.from_history),
+        is_bookmarked: Boolean(it.is_bookmarked),
+      }))
     }
   } catch (err: any) {
     console.error('加载推荐失败:', err)
@@ -543,7 +586,7 @@ const loadTrendingTopics = async () => {
   try {
     const response = await api.recommendations.getTrendingTopics({
       limit: 10
-    })
+})
     trendingTopics.value = response.data || []
   } catch (err) {
     console.error('加载热门主题失败:', err)

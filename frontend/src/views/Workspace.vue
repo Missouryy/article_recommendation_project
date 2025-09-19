@@ -123,7 +123,7 @@
                 v-for="author in followedAuthors"
                 :key="author.id"
                 class="cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 p-3 rounded"
-                @click="$router.push(`/authors/${author.id}`)"
+                @click="goToAuthor(author.name)"
               >
                 <div class="flex items-center space-x-3">
                   <div class="w-10 h-10 bg-blue-600 rounded-full flex items-center justify-center shrink-0">
@@ -149,9 +149,11 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import type { Paper, Author, Recommendation } from '@/types'
 import { api } from '@/services/api'
 
+const router = useRouter()
 const loading = ref(true)
 const stats = ref({
   total_bookmarks: 0,
@@ -217,5 +219,16 @@ const fetchDashboard = async () => {
 onMounted(() => {
   fetchDashboard()
 })
+
+// 跳转到作者详情页，与学者库跳转方式保持一致（使用作者姓名生成路由ID）
+const goToAuthor = (name: string) => {
+  try {
+    sessionStorage.setItem('authors_restore', '1')
+    sessionStorage.setItem('authors_scroll', String(window.scrollY || 0))
+  } catch (e) {}
+  // 将作者姓名中的空格替换为下划线，然后进行URL编码
+  const authorId = (name || '').replace(/\s+/g, '_')
+  router.push(`/authors/${encodeURIComponent(authorId)}`)
+}
 </script>
 

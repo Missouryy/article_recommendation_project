@@ -107,6 +107,7 @@ const goToAuthor = (id: string) => {
     sessionStorage.setItem('authors_restore', '1')
     sessionStorage.setItem('authors_scroll', String(window.scrollY || 0))
   } catch (e) {}
+  console.log(encodeURIComponent(id))
   router.push(`/authors/${encodeURIComponent(id)}`)
 }
 

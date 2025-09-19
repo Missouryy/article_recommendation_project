@@ -44,6 +44,8 @@ class RecommendationResponse(BaseModel):
     journal: Optional[str] = None
     recommendation_reason: str = Field(default="")
     created_at: str
+    from_history: Optional[bool] = Field(default=False, description="是否来自阅读历史")
+    is_bookmarked: Optional[bool] = Field(default=False, description="是否已收藏")
 
 class TrendingTopicResponse(BaseModel):
     """热门主题响应模型"""
@@ -145,7 +147,9 @@ async def get_daily_recommendations(
     current_user: User = Depends(get_current_user),
     limit: int = Query(default=20, ge=1, le=50, description="推荐数量"),
     offset: int = Query(default=0, ge=0, description="偏移量（分页）"),
-    include_reasons: bool = Query(default=True, description="是否包含推荐理由")
+    include_reasons: bool = Query(default=True, description="是否包含推荐理由"),
+    exclude_history: bool = Query(default=False, description="是否排除历史阅读论文"),
+    exclude_bookmarked: bool = Query(default=False, description="是否排除已收藏论文")
 ):
     """
     获取日常推荐
@@ -167,7 +171,9 @@ async def get_daily_recommendations(
         recommendations = await recommender.get_daily_recommendations(
             user_id=current_user.id,
             limit=limit,
-            offset=offset
+            offset=offset,
+            exclude_history=exclude_history,
+            exclude_bookmarked=exclude_bookmarked
         )
         
         if not recommendations:
@@ -201,7 +207,9 @@ async def get_daily_recommendations(
                     year=rec.get('year'),
                     journal=rec.get('journal'),
                     recommendation_reason=rec.get('recommendation_reason', '') if include_reasons else "",
-                    created_at=rec.get('created_at', datetime.now().isoformat())
+                    created_at=rec.get('created_at', datetime.now().isoformat()),
+                    from_history=rec.get('from_history', False),
+                    is_bookmarked=rec.get('is_bookmarked', False)
                 )
                 enriched_recommendations.append(enriched_rec)
             except Exception as e:
@@ -220,7 +228,9 @@ async def get_preference_recommendations(
     current_user: User = Depends(get_current_user),
     limit: int = Query(default=20, ge=1, le=50, description="推荐数量"),
     offset: int = Query(default=0, ge=0, description="偏移量（分页）"),
-    include_reasons: bool = Query(default=True, description="是否包含推荐理由")
+    include_reasons: bool = Query(default=True, description="是否包含推荐理由"),
+    exclude_history: bool = Query(default=False, description="是否排除历史阅读论文"),
+    exclude_bookmarked: bool = Query(default=False, description="是否排除已收藏论文")
 ):
     """
     获取喜好推荐
@@ -242,7 +252,9 @@ async def get_preference_recommendations(
         recommendations = await recommender.get_preference_recommendations(
             user_id=current_user.id,
             limit=limit,
-            offset=offset
+            offset=offset,
+            exclude_history=exclude_history,
+            exclude_bookmarked=exclude_bookmarked
         )
         
         if not recommendations:
@@ -276,7 +288,9 @@ async def get_preference_recommendations(
                     year=rec.get('year'),
                     journal=rec.get('journal'),
                     recommendation_reason=rec.get('recommendation_reason', '') if include_reasons else "",
-                    created_at=rec.get('created_at', datetime.now().isoformat())
+                    created_at=rec.get('created_at', datetime.now().isoformat()),
+                    from_history=rec.get('from_history', False),
+                    is_bookmarked=rec.get('is_bookmarked', False)
                 )
                 enriched_recommendations.append(enriched_rec)
             except Exception as e:

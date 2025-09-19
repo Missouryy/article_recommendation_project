@@ -92,7 +92,8 @@ class IntelligentRecommender:
             self.string_to_int_map = {}
             self.int_to_string_map = {}
 
-    async def get_daily_recommendations(self, user_id: str, limit: int = 20, offset: int = 0) -> List[Dict[str, Any]]:
+    async def get_daily_recommendations(self, user_id: str, limit: int = 20, offset: int = 0, 
+                                      exclude_history: bool = False, exclude_bookmarked: bool = False) -> List[Dict[str, Any]]:
         """
         获取日常推荐
         基于前5篇收藏论文（权重1）和前10篇阅读历史（权重1.5）
@@ -105,6 +106,7 @@ class IntelligentRecommender:
             db = await aiosqlite.connect(self.db_path)
             try:
                 # 获取用户的收藏历史（最多5篇，有多少取多少）
+                # 注意：这里总是获取收藏历史用于向量推荐，过滤在后续步骤进行
                 bookmark_query = """
                     SELECT paper_id FROM user_bookmarks 
                     WHERE user_id = ? 
@@ -115,6 +117,7 @@ class IntelligentRecommender:
                     favorite_history = [row[0] for row in bookmark_rows]
                 
                 # 获取用户的阅读历史（最多10篇，有多少取多少，过滤系统记录）
+                # 注意：这里总是获取阅读历史用于向量推荐，过滤在后续步骤进行
                 reading_query = """
                     SELECT paper_id FROM user_reading_history 
                     WHERE user_id = ? 
@@ -146,6 +149,11 @@ class IntelligentRecommender:
                     recommendation_type="日常推荐"
                 )
                 
+                # 应用过滤逻辑和状态标记
+                recommendations = await self._filter_recommendations(
+                    db, recommendations, user_id, exclude_history, exclude_bookmarked
+                )
+                
                 # 应用分页
                 recommendations = recommendations[offset:offset + limit]
                 
@@ -159,7 +167,8 @@ class IntelligentRecommender:
             logger.error(f"生成日常推荐时出错: {str(e)}")
             return await self._get_fallback_recommendations(limit, offset)
 
-    async def get_preference_recommendations(self, user_id: str, limit: int = 20, offset: int = 0) -> List[Dict[str, Any]]:
+    async def get_preference_recommendations(self, user_id: str, limit: int = 20, offset: int = 0,
+                                           exclude_history: bool = False, exclude_bookmarked: bool = False) -> List[Dict[str, Any]]:
         """
         获取喜好推荐
         基于10篇收藏论文（权重2）和前10篇阅读历史（权重1）
@@ -172,6 +181,7 @@ class IntelligentRecommender:
             db = await aiosqlite.connect(self.db_path)
             try:
                 # 获取用户的收藏历史（最多10篇，有多少取多少）
+                # 注意：这里总是获取收藏历史用于向量推荐，过滤在后续步骤进行
                 bookmark_query = """
                     SELECT paper_id FROM user_bookmarks 
                     WHERE user_id = ? 
@@ -182,6 +192,7 @@ class IntelligentRecommender:
                     favorite_history = [row[0] for row in bookmark_rows]
                 
                 # 获取用户的阅读历史（最多10篇，有多少取多少，过滤系统记录）
+                # 注意：这里总是获取阅读历史用于向量推荐，过滤在后续步骤进行
                 reading_query = """
                     SELECT paper_id FROM user_reading_history
                     WHERE user_id = ?
@@ -211,6 +222,11 @@ class IntelligentRecommender:
                     favorite_weight=2.0,
                     top_k=min(total_needed, 100),  # 最多生成100个
                     recommendation_type="喜好推荐"
+                )
+                
+                # 应用过滤逻辑和状态标记
+                recommendations = await self._filter_recommendations(
+                    db, recommendations, user_id, exclude_history, exclude_bookmarked
                 )
                 
                 # 应用分页
@@ -567,4 +583,104 @@ class IntelligentRecommender:
         except Exception as e:
             logger.error(f"获取热门主题时出错: {str(e)}")
             return []
+
+    async def _filter_recommendations(
+        self, 
+        db: aiosqlite.Connection, 
+        recommendations: List[Dict[str, Any]], 
+        user_id: str, 
+        exclude_history: bool, 
+        exclude_bookmarked: bool
+    ) -> List[Dict[str, Any]]:
+        """
+        过滤推荐结果，排除历史阅读和已收藏的论文
+        """
+        try:
+            if not recommendations:
+                return recommendations
+            
+            # 获取用户的历史数据用于标记和过滤
+            user_history = await self._get_user_history_for_filtering(db, user_id)
+            
+            # 获取需要排除的论文ID列表
+            exclude_paper_ids = set()
+            
+            if exclude_history:
+                exclude_paper_ids.update(user_history['read_history'])
+                logger.info(f"排除历史阅读: {len(user_history['read_history'])} 篇")
+            
+            if exclude_bookmarked:
+                exclude_paper_ids.update(user_history['favorite_history'])
+                logger.info(f"排除已收藏: {len(user_history['favorite_history'])} 篇")
+            
+            logger.info(f"总共需要排除: {len(exclude_paper_ids)} 篇论文")
+            if exclude_paper_ids:
+                logger.info(f"排除的论文ID示例: {list(exclude_paper_ids)[:3]}")
+            
+            # 过滤推荐结果并标记状态
+            filtered_recommendations = []
+            for rec in recommendations:
+                paper_id = rec.get('paper_id', '')
+                # 提取短ID进行匹配
+                short_id = paper_id.replace('https://openalex.org/', '') if paper_id.startswith('https://openalex.org/') else paper_id
+                
+                # 检查是否应该排除
+                if short_id not in exclude_paper_ids:
+                    # 标记论文状态
+                    rec['from_history'] = short_id in user_history['read_history']
+                    rec['is_bookmarked'] = short_id in user_history['favorite_history']
+                    filtered_recommendations.append(rec)
+                else:
+                    logger.info(f"排除论文: {paper_id} (短ID: {short_id})")
+            
+            logger.info(f"过滤前: {len(recommendations)} 条推荐, 过滤后: {len(filtered_recommendations)} 条推荐")
+            return filtered_recommendations
+            
+        except Exception as e:
+            logger.error(f"过滤推荐时出错: {str(e)}")
+            return recommendations
+
+    async def _get_user_history_for_filtering(self, db: aiosqlite.Connection, user_id: str) -> Dict[str, List[str]]:
+        """
+        获取用户历史数据用于过滤和标记
+        使用与推荐算法相同的查询逻辑
+        """
+        try:
+            # 获取用户收藏历史（与推荐算法使用相同的查询）
+            bookmark_query = """
+                SELECT paper_id FROM user_bookmarks 
+                WHERE user_id = ? 
+                ORDER BY created_at DESC
+            """
+            async with db.execute(bookmark_query, (user_id,)) as cursor:
+                bookmark_rows = await cursor.fetchall()
+                favorite_history = [row[0] for row in bookmark_rows]
+            
+            # 获取用户阅读历史（与推荐算法使用相同的查询和过滤条件）
+            reading_query = """
+                SELECT paper_id FROM user_reading_history 
+                WHERE user_id = ? 
+                AND paper_id NOT LIKE '%_visit'
+                AND paper_id NOT LIKE 'recommendation_%'
+                AND paper_id LIKE 'W%'
+                ORDER BY created_at DESC
+            """
+            async with db.execute(reading_query, (user_id,)) as cursor:
+                reading_rows = await cursor.fetchall()
+                read_history = [row[0] for row in reading_rows]
+            
+            logger.info(f"用户 {user_id} 历史数据: 收藏 {len(favorite_history)} 篇, 阅读 {len(read_history)} 篇")
+            if favorite_history:
+                logger.info(f"收藏历史: {favorite_history[:3]}{'...' if len(favorite_history) > 3 else ''}")
+            if read_history:
+                logger.info(f"阅读历史: {read_history[:3]}{'...' if len(read_history) > 3 else ''}")
+            
+            return {
+                'favorite_history': favorite_history,
+                'read_history': read_history
+            }
+            
+        except Exception as e:
+            logger.error(f"获取用户历史数据时出错: {str(e)}")
+            return {'favorite_history': [], 'read_history': []}
 

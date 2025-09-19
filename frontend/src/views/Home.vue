@@ -35,13 +35,13 @@
           
           <!-- 快速操作 -->
           <div class="flex flex-wrap justify-center gap-4 animate-slide-in">
-            <router-link to="/papers" class="btn-secondary bg-white/20 hover:bg-white/30 backdrop-blur text-gray-100">
+            <router-link to="/papers" class="btn bg-white text-blue-600 hover:bg-gray-100">
               浏览论文库
             </router-link>
-            <router-link to="/authors" class="btn-secondary bg-white/20 hover:bg-white/30 backdrop-blur text-gray-100">
+            <router-link to="/authors" class="btn bg-white text-blue-600 hover:bg-gray-100">
               学者画像
             </router-link>
-            <router-link v-if="!userStore.isAuthenticated" to="/register" class="btn-primary">
+            <router-link v-if="!userStore.isAuthenticated" to="/register" class="btn bg-white text-blue-600 hover:bg-gray-100">
               免费注册
             </router-link>
           </div>
