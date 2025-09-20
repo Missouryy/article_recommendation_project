@@ -50,7 +50,7 @@ async def get_author_papers(
     获取作者发表的论文列表
     
     - **author_name**: 作者姓名
-    - **limit**: 返回的论文数量限制
+    - **limit**: 论文数限制
     - **sort_by**: 排序方式（year: 发表年份, citation: 引用数）
     - **order**: 排序顺序（asc: 升序, desc: 降序）
     """
