@@ -15,7 +15,7 @@ RECOMMENDATION_COUNT = 100  # 您希望推荐的论文数量
 # --- 2. 辅助函数与核心推荐逻辑 ---
 
 def load_resources():
-    """加载Faiss索引和ID映射表。"""
+    """加载Faiss索引和ID映射表。资源加载单元测试"""
     print("="*50)
     print("开始加载推荐所需资源...")
 
@@ -56,7 +56,7 @@ def get_titles_from_db(string_ids):
     return title_map
 
 def recommend_for_user(index, string_to_int_map, int_to_string_map, read_history, favorite_history, top_k=100):
-    """为用户生成推荐。"""
+    """为用户生成推荐。推荐算法集成测试"""
     print("\n开始为用户生成推荐...")
     
     # --- 步骤1: 将历史记录的字符串ID转换为整数ID ---
